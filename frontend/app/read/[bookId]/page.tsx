@@ -10,7 +10,8 @@ import { useReadStore } from "@/lib/store"; // Added import
 export default function ReadPage() {
   const params = useParams();
   const bookId = params.bookId as string;
-  const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } = useReadStore(); // Added useReadStore properties
+  const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } =
+    useReadStore(); // Added useReadStore properties
 
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
@@ -248,18 +249,23 @@ export default function ReadPage() {
               {/* Added wrapper div */}
               <div
                 className="prose lg:prose-lg"
-                style={{
-                  fontSize: `${fontSize}px`,
-                  lineHeight: `${lineHeight}`,
-                  // Use a CSS variable for paragraph spacing that can be targeted in global.css
-                  '--paragraph-spacing-multiplier': paragraphSpacing,
-                } as React.CSSProperties}
+                style={
+                  {
+                    fontSize: `${fontSize}px`,
+                    lineHeight: `${lineHeight}`,
+                    // Use a CSS variable for paragraph spacing that can be targeted in global.css
+                    "--paragraph-spacing-multiplier": paragraphSpacing,
+                  } as React.CSSProperties
+                }
                 dangerouslySetInnerHTML={{ __html: chapterContent }}
               />
             </div>
           )}
           {(chapterContent || chapterContentError) && (
-            <div className="flex justify-between mt-8">
+            <div
+              className="flex justify-between pt-10"
+              style={{ maxWidth: `${contentWidth}px`, margin: "0 auto" }}
+            >
               <button
                 onClick={goToPreviousChapter}
                 disabled={isFirstChapter || loading}
