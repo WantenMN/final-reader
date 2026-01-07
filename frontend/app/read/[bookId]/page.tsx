@@ -14,6 +14,7 @@ export default function ReadPage() {
   const [chapterContent, setChapterContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [chapterContentError, setChapterContentError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -70,7 +71,7 @@ export default function ReadPage() {
       }
 
       setLoading(true);
-      setError(null);
+      setChapterContentError(null);
 
       const chapter = chapters[currentChapterIndex];
       try {
@@ -83,7 +84,8 @@ export default function ReadPage() {
         const content = await contentResponse.text();
         setChapterContent(content);
       } catch (err: any) {
-        setError(err.message);
+        setChapterContentError(err.message);
+        setChapterContent(''); // Clear content on error
       } finally {
         setLoading(false);
       }
@@ -141,10 +143,14 @@ export default function ReadPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">{currentChapter?.title || 'Unknown Chapter'}</h1>
-      <div
-        className="prose lg:prose-lg mx-auto"
-        dangerouslySetInnerHTML={{ __html: chapterContent }}
-      />
+      {chapterContentError ? (
+        <div className="text-red-500 mb-4">Error loading chapter content: {chapterContentError}</div>
+      ) : (
+        <div
+          className="prose lg:prose-lg mx-auto"
+          dangerouslySetInnerHTML={{ __html: chapterContent }}
+        />
+      )}
       <div className="flex justify-between mt-8">
         <button
           onClick={goToPreviousChapter}

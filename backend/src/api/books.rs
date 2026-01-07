@@ -89,7 +89,7 @@ pub async fn get_book_chapters(
         }
     };
 
-    let mut doc = match EpubDoc::new(&book.path) {
+    let doc = match EpubDoc::new(&book.path) {
         Ok(doc) => doc,
         Err(e) => {
             eprintln!("Failed to parse epub {}: {}", book.path, e);
@@ -100,17 +100,24 @@ pub async fn get_book_chapters(
         }
     };
 
-    let chapters = doc
-        .toc
-        .iter()
-        .map(|item| Chapter {
-            id: item.content.to_string_lossy().to_string(),
-            title: item.label.clone(),
-            path: item.content.to_string_lossy().to_string(),
-        })
-        .collect();
+    let mut chapters = Vec::new();
+    for item in doc.toc.iter() {
+        flatten_nav_points(item, &mut chapters);
+    }
 
     Ok(Json(chapters))
+}
+
+fn flatten_nav_points(nav_point: &epub::doc::NavPoint, chapters: &mut Vec<Chapter>) {
+    chapters.push(Chapter {
+        id: nav_point.content.to_string_lossy().to_string(),
+        title: nav_point.label.clone(),
+        path: nav_point.content.to_string_lossy().to_string(),
+    });
+
+    for child in nav_point.children.iter() {
+        flatten_nav_points(child, chapters);
+    }
 }
 
 pub async fn list_books(
