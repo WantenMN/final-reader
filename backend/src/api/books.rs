@@ -1,17 +1,117 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
-    response::Json,
+    response::{Html, Json},
 };
 use chrono::Utc;
 use epub::doc::EpubDoc;
 use futures_util::stream::StreamExt;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::fs;
 use uuid::Uuid;
 
 use crate::db::models::Book;
 use crate::AppState;
+
+#[derive(Serialize)]
+pub struct Chapter {
+    pub id: String,
+    pub title: String,
+    pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct ChapterContentQuery {
+    path: String,
+}
+
+pub async fn get_chapter_content(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<ChapterContentQuery>,
+) -> Result<Html<String>, (StatusCode, Json<Value>)> {
+    println!("GET /api/books/{}/chapter?path={}", id, query.path);
+    let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(book) => book,
+        Err(e) => {
+            eprintln!("Failed to fetch book: {}", e);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Book not found" })),
+            ));
+        }
+    };
+
+    let mut doc = match EpubDoc::new(&book.path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("Failed to parse epub {}: {}", book.path, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to parse epub" })),
+            ));
+        }
+    };
+
+    if let Some(content) = doc.get_resource_by_path(&query.path) {
+        let content_str = String::from_utf8_lossy(&content).to_string();
+        Ok(Html(content_str))
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Chapter not found" })),
+        ))
+    }
+}
+
+pub async fn get_book_chapters(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<Chapter>>, (StatusCode, Json<Value>)> {
+    println!("GET /api/books/{}/chapters", id);
+    let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(book) => book,
+        Err(e) => {
+            eprintln!("Failed to fetch book: {}", e);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Book not found" })),
+            ));
+        }
+    };
+
+    let mut doc = match EpubDoc::new(&book.path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("Failed to parse epub {}: {}", book.path, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to parse epub" })),
+            ));
+        }
+    };
+
+    let chapters = doc
+        .toc
+        .iter()
+        .map(|item| Chapter {
+            id: item.content.to_string_lossy().to_string(),
+            title: item.label.clone(),
+            path: item.content.to_string_lossy().to_string(),
+        })
+        .collect();
+
+    Ok(Json(chapters))
+}
 
 pub async fn list_books(
     State(state): State<AppState>,

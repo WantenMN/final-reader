@@ -6,3 +6,9 @@ export interface Book {
   cover_path: string | null;
   imported_at: string;
 }
+
+export interface Chapter {
+  id: string;
+  title: string;
+  path: string;
+}
