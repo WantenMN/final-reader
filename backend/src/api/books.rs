@@ -7,12 +7,12 @@ use chrono::Utc;
 use epub::doc::EpubDoc;
 use futures_util::stream::StreamExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::fs;
 use uuid::Uuid;
 
-use crate::db::models::Book;
 use crate::AppState;
+use crate::db::models::Book;
 
 #[derive(Serialize)]
 pub struct Chapter {
@@ -101,8 +101,31 @@ pub async fn get_book_chapters(
     };
 
     let mut chapters = Vec::new();
-    for item in doc.toc.iter() {
-        flatten_nav_points(item, &mut chapters);
+    if doc.toc.is_empty() {
+        // Fallback: If no TOC, generate chapters from resources
+        let mut xhtml_resources: Vec<(String, epub::doc::ResourceItem)> = doc
+            .resources
+            .into_iter()
+            .filter(|(_, item)| item.mime == "application/xhtml+xml")
+            .collect();
+
+        // Sort resources by their id to ensure correct reading order
+        xhtml_resources.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut chapter_count = 1;
+        for (id, resource_item) in xhtml_resources {
+            chapters.push(Chapter {
+                id: id,
+                title: format!("Chapter {}", chapter_count), // Generic title
+                path: resource_item.path.to_string_lossy().to_string(),
+            });
+            chapter_count += 1;
+        }
+    } else {
+        // Original logic: use TOC
+        for item in doc.toc.iter() {
+            flatten_nav_points(item, &mut chapters);
+        }
     }
 
     Ok(Json(chapters))
@@ -302,4 +325,3 @@ pub async fn import_books(
 
     Ok(Json(imported_books))
 }
-
