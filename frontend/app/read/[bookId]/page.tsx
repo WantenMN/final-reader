@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/constants";
 import type { Chapter } from "@/app/types";
@@ -13,10 +13,15 @@ export default function ReadPage() {
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
   const [chapterContent, setChapterContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+  const [stateLoaded, setStateLoaded] = useState<boolean>(false); // New state to track if reading state is loaded
   const [error, setError] = useState<string | null>(null);
   const [chapterContentError, setChapterContentError] = useState<string | null>(
     null
   );
+  const [initialScrollDone, setInitialScrollDone] = useState<boolean>(false); // New state to track initial scroll
+
+  const tocRef = useRef<HTMLDivElement>(null);
+  const currentChapterRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -24,9 +29,10 @@ export default function ReadPage() {
 
       setLoading(true);
       setError(null);
+      setStateLoaded(false); // Reset stateLoaded when starting to fetch
 
       try {
-        // Fetch chapters
+        // 1. Fetch chapters
         const chaptersResponse = await fetch(
           `${API_URL}/api/books/${bookId}/chapters`
         );
@@ -36,7 +42,7 @@ export default function ReadPage() {
         const fetchedChapters: Chapter[] = await chaptersResponse.json();
         setChapters(fetchedChapters);
 
-        // Fetch reading state
+        // 2. Load state and determine current chapter
         let initialChapterIndex = 0;
         try {
           const stateResponse = await fetch(
@@ -46,6 +52,7 @@ export default function ReadPage() {
             const readingState = await stateResponse.json();
             const savedPosition = readingState.position;
             if (savedPosition) {
+              // 2.1 If state exists, find the corresponding chapter
               const savedChapterIndex = fetchedChapters.findIndex(
                 (chap) => chap.path === savedPosition
               );
@@ -59,12 +66,15 @@ export default function ReadPage() {
             "No saved reading state found or failed to fetch state:",
             stateError
           );
-          // Continue with default initialChapterIndex (0)
+          // 2.2 If no state, continue with default (first chapter)
         }
+
+        // Set the current chapter index based on state or default to first
         setCurrentChapterIndex(initialChapterIndex);
       } catch (err: any) {
         setError(err.message);
       } finally {
+        setStateLoaded(true); // Mark that state loading is complete
         setLoading(false);
       }
     }
@@ -74,7 +84,7 @@ export default function ReadPage() {
 
   useEffect(() => {
     async function fetchChapterContent() {
-      if (chapters.length === 0 || currentChapterIndex === -1) {
+      if (chapters.length === 0 || currentChapterIndex === -1 || !stateLoaded) {
         setChapterContent("");
         return;
       }
@@ -102,11 +112,11 @@ export default function ReadPage() {
       }
     }
     fetchChapterContent();
-  }, [bookId, chapters, currentChapterIndex]);
+  }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
   useEffect(() => {
     async function updateReadingState() {
-      if (chapters.length === 0 || currentChapterIndex === -1) {
+      if (chapters.length === 0 || currentChapterIndex === -1 || !stateLoaded) {
         return;
       }
 
@@ -124,7 +134,29 @@ export default function ReadPage() {
       }
     }
     updateReadingState();
-  }, [bookId, chapters, currentChapterIndex]);
+  }, [bookId, chapters, currentChapterIndex, stateLoaded]);
+
+  // Auto-scroll to current chapter in sidebar
+  useEffect(() => {
+    if (!initialScrollDone && currentChapterRef.current && tocRef.current) {
+      // Scroll to the current chapter without animation
+      const sidebar = tocRef.current;
+      const currentChapterElement = currentChapterRef.current;
+
+      const elementTop = currentChapterElement.offsetTop;
+      const elementHeight = currentChapterElement.offsetHeight;
+      const sidebarHeight = sidebar.clientHeight;
+
+      // Calculate the position to scroll to
+      const elementPosition = elementTop - sidebar.offsetTop;
+      const middlePosition = elementPosition - (sidebarHeight / 2) + (elementHeight / 2);
+
+      // Scroll to position without animation
+      sidebar.scrollTop = middlePosition;
+
+      setInitialScrollDone(true); // Mark that initial scroll has been done
+    }
+  }, [currentChapterIndex, chapters.length, initialScrollDone]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -144,10 +176,10 @@ export default function ReadPage() {
     }
   };
 
-  if (loading && chapters.length === 0) {
+  if (loading && (!stateLoaded || chapters.length === 0)) {
     return (
       <div className="py-8">
-        <div className="max-w-screen-md mx-auto px-4">Loading book...</div>
+        <div className="max-w-3xl mx-auto px-4">Loading book...</div>
       </div>
     );
   }
@@ -155,7 +187,7 @@ export default function ReadPage() {
   if (error) {
     return (
       <div className="py-8">
-        <div className="max-w-screen-md mx-auto px-4 text-red-500">
+        <div className="max-w-3xl mx-auto px-4 text-red-500">
           Error: {error}
         </div>
       </div>
@@ -169,12 +201,16 @@ export default function ReadPage() {
   return (
     <div className="flex">
       {/* Left sidebar for table of contents */}
-      <div className="w-64 p-4 border-r h-screen overflow-y-auto sticky top-0">
+      <div ref={tocRef} className="w-64 p-4 border-r h-screen overflow-y-auto sticky top-0">
         <h2 className="text-xl font-bold mb-4">Chapters</h2>
         <nav>
           <ul>
             {chapters.map((chapter, index) => (
-              <li key={index} className="mb-2">
+              <li
+                key={index}
+                ref={index === currentChapterIndex ? currentChapterRef : null}
+                className="mb-2"
+              >
                 <button
                   onClick={() => setCurrentChapterIndex(index)}
                   className={`text-left w-full p-2 rounded-md ${
@@ -192,7 +228,7 @@ export default function ReadPage() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-grow p-4">
+      <div className="grow p-4">
         <h1 className="text-2xl font-bold mb-4">
           {currentChapter?.title || "Unknown Chapter"}
         </h1>
@@ -210,22 +246,24 @@ export default function ReadPage() {
             />
           </div>
         )}
-        <div className="flex justify-between mt-8">
-          <button
-            onClick={goToPreviousChapter}
-            disabled={isFirstChapter || loading}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
-          >
-            Previous Chapter
-          </button>
-          <button
-            onClick={goToNextChapter}
-            disabled={isLastChapter || loading}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
-          >
-            Next Chapter
-          </button>
-        </div>
+        {(chapterContent || chapterContentError) && (
+          <div className="flex justify-between mt-8">
+            <button
+              onClick={goToPreviousChapter}
+              disabled={isFirstChapter || loading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
+            >
+              Previous Chapter
+            </button>
+            <button
+              onClick={goToNextChapter}
+              disabled={isLastChapter || loading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
+            >
+              Next Chapter
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
