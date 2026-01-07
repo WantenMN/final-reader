@@ -1,13 +1,14 @@
 use axum::{
-    routing::{get, post},
     Router,
+    extract::DefaultBodyLimit,
+    routing::{get, post},
 };
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::api;
+use crate::{AppState, api};
 
-pub async fn start_server() {
+pub async fn start_server(app_state: AppState) {
     let cors = CorsLayer::new()
         .allow_methods(Any)
         .allow_origin(Any)
@@ -15,12 +16,14 @@ pub async fn start_server() {
 
     let app = Router::new()
         .route("/api/books", get(api::books::list_books))
-        .route("/api/import", post(api::books::import_book))
+        .route("/api/import", post(api::books::import_books))
         .route(
             "/api/book/:id/state",
             get(api::state::get_state).post(api::state::update_state),
         )
-        .layer(cors);
+        .layer(cors)
+        .layer(DefaultBodyLimit::disable())
+        .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 7878));
     println!("Server listening on {}", addr);

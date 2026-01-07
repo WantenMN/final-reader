@@ -12,14 +12,16 @@ export default function ImportButton({ onBookImported }: ImportButtonProps) {
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
       return;
     }
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append('file', file);
+    for (let i = 0; i < files.length; i++) {
+      formData.append('file', files[i]);
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/import`, {
@@ -59,13 +61,14 @@ export default function ImportButton({ onBookImported }: ImportButtonProps) {
         className="hidden"
         accept=".epub"
         disabled={isUploading}
+        multiple
       />
       <button
         onClick={handleClick}
         disabled={isUploading}
         className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400"
       >
-        {isUploading ? 'Uploading...' : 'Import Book'}
+        {isUploading ? 'Uploading...' : 'Import Books'}
       </button>
     </>
   );

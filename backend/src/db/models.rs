@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use sqlx::FromRow;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, FromRow)]
 pub struct Book {
     pub id: Uuid,
     pub title: String,
@@ -12,7 +13,7 @@ pub struct Book {
     pub imported_at: DateTime<Utc>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, FromRow)]
 pub struct ReadingState {
     pub book_id: Uuid,
     pub position: Option<String>,
