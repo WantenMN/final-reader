@@ -4,10 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/constants";
 import type { Chapter } from "@/app/types";
+import ReadHeader from "@/components/ReadHeader"; // Added import
+import { useReadStore } from "@/lib/store"; // Added import
 
 export default function ReadPage() {
   const params = useParams();
   const bookId = params.bookId as string;
+  const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } = useReadStore(); // Added useReadStore properties
 
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
@@ -18,7 +21,7 @@ export default function ReadPage() {
   const [chapterContentError, setChapterContentError] = useState<string | null>(
     null
   );
-  const [initialScrollDone, setInitialScrollDone] = useState<boolean>(false); // New state to track initial scroll
+  // Removed initialScrollDone state
 
   const tocRef = useRef<HTMLDivElement>(null);
   const currentChapterRef = useRef<HTMLLIElement>(null);
@@ -136,10 +139,9 @@ export default function ReadPage() {
     updateReadingState();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
-  // Auto-scroll to current chapter in sidebar
+  // Auto-scroll to current chapter in sidebar when TOC opens or chapter changes
   useEffect(() => {
-    if (!initialScrollDone && currentChapterRef.current && tocRef.current) {
-      // Scroll to the current chapter without animation
+    if (isTocOpen && currentChapterRef.current && tocRef.current) {
       const sidebar = tocRef.current;
       const currentChapterElement = currentChapterRef.current;
 
@@ -149,14 +151,13 @@ export default function ReadPage() {
 
       // Calculate the position to scroll to
       const elementPosition = elementTop - sidebar.offsetTop;
-      const middlePosition = elementPosition - (sidebarHeight / 2) + (elementHeight / 2);
+      const middlePosition =
+        elementPosition - sidebarHeight / 2 + elementHeight / 2;
 
       // Scroll to position without animation
       sidebar.scrollTop = middlePosition;
-
-      setInitialScrollDone(true); // Mark that initial scroll has been done
     }
-  }, [currentChapterIndex, chapters.length, initialScrollDone]);
+  }, [currentChapterIndex, chapters.length, isTocOpen]); // Added isTocOpen to dependencies
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -199,72 +200,84 @@ export default function ReadPage() {
   const isLastChapter = currentChapterIndex === chapters.length - 1;
 
   return (
-    <div className="flex">
-      {/* Left sidebar for table of contents */}
-      <div ref={tocRef} className="w-64 p-4 border-r h-screen overflow-y-auto sticky top-0">
-        <h2 className="text-xl font-bold mb-4">Chapters</h2>
-        <nav>
-          <ul>
-            {chapters.map((chapter, index) => (
-              <li
-                key={index}
-                ref={index === currentChapterIndex ? currentChapterRef : null}
-                className="mb-2"
+    <>
+      <ReadHeader />
+      <div className="flex">
+        {/* Left sidebar for table of contents */}
+        {isTocOpen && ( // Conditional rendering based on isTocOpen
+          <div
+            ref={tocRef}
+            className="w-64 p-4 border-r h-screen overflow-y-auto sticky top-0 pt-20"
+          >
+            <h2 className="text-xl font-bold mb-4">Chapters</h2>
+            <nav>
+              <ul>
+                {chapters.map((chapter, index) => (
+                  <li
+                    key={index}
+                    ref={
+                      index === currentChapterIndex ? currentChapterRef : null
+                    }
+                    className="mb-2"
+                  >
+                    <button
+                      onClick={() => setCurrentChapterIndex(index)}
+                      className={`text-left w-full p-2 rounded-md cursor-pointer ${
+                        index === currentChapterIndex
+                          ? "bg-blue-500 text-white"
+                          : "hover:bg-gray-200"
+                      }`}
+                    >
+                      {chapter.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>{" "}
+          </div>
+        )}
+        {/* Main content area */}
+        <div className="grow p-4 pt-20">
+          {chapterContentError ? (
+            <div className="text-red-500 mb-4">
+              Error loading chapter content: {chapterContentError}
+            </div>
+          ) : (
+            <div className="mx-auto" style={{ maxWidth: `${contentWidth}px` }}>
+              {" "}
+              {/* Added wrapper div */}
+              <div
+                className="prose lg:prose-lg"
+                style={{
+                  fontSize: `${fontSize}px`,
+                  lineHeight: `${lineHeight}`,
+                  // Use a CSS variable for paragraph spacing that can be targeted in global.css
+                  '--paragraph-spacing-multiplier': paragraphSpacing,
+                } as React.CSSProperties}
+                dangerouslySetInnerHTML={{ __html: chapterContent }}
+              />
+            </div>
+          )}
+          {(chapterContent || chapterContentError) && (
+            <div className="flex justify-between mt-8">
+              <button
+                onClick={goToPreviousChapter}
+                disabled={isFirstChapter || loading}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300 cursor-pointer"
               >
-                <button
-                  onClick={() => setCurrentChapterIndex(index)}
-                  className={`text-left w-full p-2 rounded-md ${
-                    index === currentChapterIndex
-                      ? "bg-blue-500 text-white"
-                      : "hover:bg-gray-200"
-                  }`}
-                >
-                  {chapter.title}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>{" "}
+                Previous Chapter
+              </button>
+              <button
+                onClick={goToNextChapter}
+                disabled={isLastChapter || loading}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300 cursor-pointer"
+              >
+                Next Chapter
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Main content area */}
-      <div className="grow p-4">
-        <h1 className="text-2xl font-bold mb-4">
-          {currentChapter?.title || "Unknown Chapter"}
-        </h1>
-        {chapterContentError ? (
-          <div className="text-red-500 mb-4">
-            Error loading chapter content: {chapterContentError}
-          </div>
-        ) : (
-          <div className="max-w-prose mx-auto">
-            {" "}
-            {/* Added wrapper div */}
-            <div
-              className="prose lg:prose-lg"
-              dangerouslySetInnerHTML={{ __html: chapterContent }}
-            />
-          </div>
-        )}
-        {(chapterContent || chapterContentError) && (
-          <div className="flex justify-between mt-8">
-            <button
-              onClick={goToPreviousChapter}
-              disabled={isFirstChapter || loading}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
-            >
-              Previous Chapter
-            </button>
-            <button
-              onClick={goToNextChapter}
-              disabled={isLastChapter || loading}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md disabled:bg-gray-300"
-            >
-              Next Chapter
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

@@ -1,2 +1,16 @@
 @import "tailwindcss";
 
+.prose p {
+  margin-bottom: calc(var(--paragraph-spacing-multiplier, 1) * 1em); /* Default to 1em if variable not set */
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
