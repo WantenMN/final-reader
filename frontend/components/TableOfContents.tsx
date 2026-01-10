@@ -209,7 +209,7 @@ export default function TableOfContents({
   return (
     <div
       ref={tocRef}
-      className={`fixed top-0 left-0 w-76 p-4 shadow-2xl h-screen overflow-y-auto pt-20 transform transition-all duration-300 ease-in-out z-20 ${
+      className={`fixed top-0 left-0 w-76 p-4 shadow-2xl h-screen overflow-y-auto pt-20 transform transition-all duration-300 ease-in-out z-20 bg-white ${
         isTocOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
       }`}
     >

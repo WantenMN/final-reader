@@ -191,7 +191,7 @@ export default function ReadPage() {
         
         // Calculate the position to scroll to: scroll to top with offset (80px for header)
         // Add some extra offset to ensure it's not covered
-        const offset = 80;
+        const offset = 60;
         const scrollPosition = elementTop - offset;
 
         // Scroll to position without animation
@@ -264,7 +264,7 @@ export default function ReadPage() {
           currentChapterRef={currentChapterRef}
         />
         {/* Main content area */}
-        <div className="grow p-4 pt-20">
+        <div className={`grow p-4 pt-20 transition-all duration-300 ${isTocOpen ? 'ml-76' : 'ml-0'}`}>
           {chapterContentError ? (
             <div className="text-red-500 mb-4">
               Error loading chapter content: {chapterContentError}
