@@ -61,7 +61,10 @@ pub async fn get_chapter_content(
         }
     };
 
-    if let Some(content) = doc.get_resource_by_path(&normalized_path) {
+    // Remove fragment (anchor) from path if present, as it's not part of the actual file path
+    let path_without_fragment = normalized_path.split('#').next().unwrap_or(&normalized_path);
+    
+    if let Some(content) = doc.get_resource_by_path(path_without_fragment) {
         let content_str = String::from_utf8_lossy(&content).to_string();
         
         // Return the original content, let frontend handle URL processing
@@ -81,6 +84,8 @@ pub async fn get_book_resource(
 ) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
     // Normalize path to use forward slashes and remove leading slash if present
     let normalized_path = resource_path.replace('\\', "/").trim_start_matches('/').to_string();
+    // Remove fragment (anchor) from path if present, as it's not part of the actual file path
+    let path_without_fragment = normalized_path.split('#').next().unwrap_or(&normalized_path);
     println!("GET /api/books/{}/resource/{}", id, normalized_path);
     let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
         .bind(id)
@@ -110,8 +115,8 @@ pub async fn get_book_resource(
 
     // Try different path combinations to find the resource
     // 1. First try the exact path provided
-    if let Some(content) = doc.get_resource_by_path(&normalized_path) {
-        let mime_type = mime_guess::from_path(&normalized_path).first_or_octet_stream();
+    if let Some(content) = doc.get_resource_by_path(path_without_fragment) {
+        let mime_type = mime_guess::from_path(path_without_fragment).first_or_octet_stream();
         let response = axum::response::Response::builder()
             .status(StatusCode::OK)
             .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
@@ -121,7 +126,7 @@ pub async fn get_book_resource(
     }
     
     // 2. Try with OEBPS/ prefix (common EPUB structure)
-    let oebps_path = format!("OEBPS/{}", normalized_path);
+    let oebps_path = format!("OEBPS/{}", path_without_fragment);
     if let Some(content) = doc.get_resource_by_path(&oebps_path) {
         let mime_type = mime_guess::from_path(&oebps_path).first_or_octet_stream();
         let response = axum::response::Response::builder()
@@ -133,7 +138,7 @@ pub async fn get_book_resource(
     }
     
     // 3. Try with lowercase oebps/ prefix
-    let oebps_lower_path = format!("oebps/{}", normalized_path);
+    let oebps_lower_path = format!("oebps/{}", path_without_fragment);
     if let Some(content) = doc.get_resource_by_path(&oebps_lower_path) {
         let mime_type = mime_guess::from_path(&oebps_lower_path).first_or_octet_stream();
         let response = axum::response::Response::builder()
@@ -145,7 +150,7 @@ pub async fn get_book_resource(
     }
     
     // 4. Try with leading /
-    let leading_slash_path = format!("/{}", normalized_path);
+    let leading_slash_path = format!("/{}", path_without_fragment);
     if let Some(content) = doc.get_resource_by_path(&leading_slash_path) {
         let mime_type = mime_guess::from_path(&leading_slash_path).first_or_octet_stream();
         let response = axum::response::Response::builder()
