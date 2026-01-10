@@ -155,7 +155,6 @@ export default function TableOfContents({
         <li
           key={chapter.path} // Use unique path as key instead of index
           ref={isCurrentChapter ? currentChapterRef : null}
-          className="mb-1"
         >
           <button
             onClick={() => {
@@ -167,7 +166,7 @@ export default function TableOfContents({
                 onChapterClick(targetIndex);
               }
             }}
-            className={`text-left w-full p-2 rounded-md cursor-pointer flex items-center ${isCurrentChapter ? "bg-blue-500 text-white" : "hover:bg-gray-200"}`}
+            className={`text-left w-full p-2 my-1 rounded-md cursor-pointer flex items-center ${isCurrentChapter ? "bg-blue-500 text-white" : "hover:bg-gray-200"}`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
           >
             {/* Move expansion icon to the left - Using lucide-react icons */}
@@ -192,7 +191,7 @@ export default function TableOfContents({
           
           {/* Render children if expanded */}
           {hasKids && isExpanded && (
-            <ul className="ml-4">
+            <ul className="ml-4 mt-0">
               {children.map((child) => renderChapter(child, depth + 1))}
             </ul>
           )}
@@ -208,16 +207,16 @@ export default function TableOfContents({
   };
 
   return (
-    isTocOpen && (
-      <div
-        ref={tocRef}
-        className="w-76 p-4 shadow-2xl h-screen overflow-y-auto sticky top-0 pt-20"
-      >
-        <h2 className="text-xl font-bold mb-4">Chapters</h2>
-        <nav>
-              {renderTocChapters()}
-            </nav>
-      </div>
-    )
+    <div
+      ref={tocRef}
+      className={`fixed top-0 left-0 w-76 p-4 shadow-2xl h-screen overflow-y-auto pt-20 transform transition-all duration-300 ease-in-out z-20 ${
+        isTocOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+      }`}
+    >
+      <h2 className="text-xl font-bold mb-4">Chapters</h2>
+      <nav>
+            {renderTocChapters()}
+          </nav>
+    </div>
   );
 }
