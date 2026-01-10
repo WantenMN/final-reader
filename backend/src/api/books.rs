@@ -31,7 +31,9 @@ pub async fn get_chapter_content(
     Path(id): Path<Uuid>,
     Query(query): Query<ChapterContentQuery>,
 ) -> Result<Html<String>, (StatusCode, Json<Value>)> {
-    println!("GET /api/books/{}/chapter?path={}", id, query.path);
+    // Normalize path to use forward slashes
+    let normalized_path = query.path.replace('\\', "/");
+    println!("GET /api/books/{}/chapter?path={}", id, normalized_path);
     let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
         .bind(id)
         .fetch_one(&state.db_pool)
@@ -58,7 +60,7 @@ pub async fn get_chapter_content(
         }
     };
 
-    if let Some(content) = doc.get_resource_by_path(&query.path) {
+    if let Some(content) = doc.get_resource_by_path(&normalized_path) {
         let content_str = String::from_utf8_lossy(&content).to_string();
         Ok(Html(content_str))
     } else {
@@ -117,7 +119,7 @@ pub async fn get_book_chapters(
             chapters.push(Chapter {
                 id: id,
                 title: format!("Chapter {}", chapter_count), // Generic title
-                path: resource_item.path.to_string_lossy().to_string(),
+                path: resource_item.path.to_string_lossy().replace('\\', "/"),
             });
             chapter_count += 1;
         }
@@ -135,7 +137,7 @@ fn flatten_nav_points(nav_point: &epub::doc::NavPoint, chapters: &mut Vec<Chapte
     chapters.push(Chapter {
         id: nav_point.content.to_string_lossy().to_string(),
         title: nav_point.label.clone(),
-        path: nav_point.content.to_string_lossy().to_string(),
+        path: nav_point.content.to_string_lossy().replace('\\', "/"),
     });
 
     for child in nav_point.children.iter() {
