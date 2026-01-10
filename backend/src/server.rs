@@ -19,6 +19,7 @@ pub async fn start_server(app_state: AppState) {
         .route("/api/books/:id/chapters", get(api::books::get_book_chapters))
         .route("/api/books/:id/toc", get(api::books::get_book_toc))
         .route("/api/books/:id/chapter", get(api::books::get_chapter_content))
+        .route("/api/books/:id/resource/*resource_path", get(api::books::get_book_resource))
         .route("/api/import", post(api::books::import_books))
         .route(
             "/api/book/:id/state",

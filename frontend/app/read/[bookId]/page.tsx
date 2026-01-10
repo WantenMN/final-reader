@@ -111,22 +111,40 @@ export default function ReadPage() {
 
       const chapter = chapters[currentChapterIndex];
       try {
-        const contentResponse = await fetch(
-          `${API_URL}/api/books/${bookId}/chapter?path=${encodeURIComponent(
-            chapter.path
-          )}`
-        );
-        if (!contentResponse.ok) {
-          throw new Error("Failed to fetch chapter content");
+          const contentResponse = await fetch(
+            `${API_URL}/api/books/${bookId}/chapter?path=${encodeURIComponent(
+              chapter.path
+            )}`
+          );
+          if (!contentResponse.ok) {
+            throw new Error("Failed to fetch chapter content");
+          }
+          let content = await contentResponse.text();
+          
+          // Process content to replace relative URLs with absolute URLs pointing to the resource endpoint
+          const resourceBaseUrl = `${API_URL}/api/books/${bookId}/resource/`;
+          
+          // Use simple string replacement for all relative URL patterns
+          // These replacements will handle most common cases
+          content = content.replace(/src="\.\.\//g, `src="${resourceBaseUrl}`);
+          content = content.replace(/src="\.\//g, `src="${resourceBaseUrl}`);
+          content = content.replace(/href="\.\.\//g, `href="${resourceBaseUrl}`);
+          content = content.replace(/href="\.\//g, `href="${resourceBaseUrl}`);
+          
+          // For direct relative paths like src="image.jpg", we need to be careful
+          // to only replace them if they're not already absolute URLs
+          // Handle src attributes
+          content = content.replace(/src="([^http][^"]+)"/g, `src="${resourceBaseUrl}$1"`);
+          // Handle href attributes
+          content = content.replace(/href="([^http][^"]+)"/g, `href="${resourceBaseUrl}$1"`);
+          
+          setChapterContent(content);
+        } catch (err: any) {
+          setChapterContentError(err.message);
+          setChapterContent(""); // Clear content on error
+        } finally {
+          setLoading(false);
         }
-        const content = await contentResponse.text();
-        setChapterContent(content);
-      } catch (err: any) {
-        setChapterContentError(err.message);
-        setChapterContent(""); // Clear content on error
-      } finally {
-        setLoading(false);
-      }
     }
     fetchChapterContent();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);

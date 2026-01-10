@@ -63,6 +63,8 @@ pub async fn get_chapter_content(
 
     if let Some(content) = doc.get_resource_by_path(&normalized_path) {
         let content_str = String::from_utf8_lossy(&content).to_string();
+        
+        // Return the original content, let frontend handle URL processing
         Ok(Html(content_str))
     } else {
         Err((
@@ -71,6 +73,97 @@ pub async fn get_chapter_content(
         ))
     }
 }
+
+// Add a new endpoint to serve EPUB resources like images, fonts, etc.
+pub async fn get_book_resource(
+    State(state): State<AppState>,
+    Path((id, resource_path)): Path<(Uuid, String)>,
+) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
+    // Normalize path to use forward slashes and remove leading slash if present
+    let normalized_path = resource_path.replace('\\', "/").trim_start_matches('/').to_string();
+    println!("GET /api/books/{}/resource/{}", id, normalized_path);
+    let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(book) => book,
+        Err(e) => {
+            eprintln!("Failed to fetch book: {}", e);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Book not found" })),
+            ));
+        }
+    };
+
+    let mut doc = match EpubDoc::new(&book.path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("Failed to parse epub {}: {}", book.path, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to parse epub" })),
+            ));
+        }
+    };
+
+    // Try different path combinations to find the resource
+    // 1. First try the exact path provided
+    if let Some(content) = doc.get_resource_by_path(&normalized_path) {
+        let mime_type = mime_guess::from_path(&normalized_path).first_or_octet_stream();
+        let response = axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+            .body(axum::body::Body::from(content))
+            .unwrap();
+        return Ok(response);
+    }
+    
+    // 2. Try with OEBPS/ prefix (common EPUB structure)
+    let oebps_path = format!("OEBPS/{}", normalized_path);
+    if let Some(content) = doc.get_resource_by_path(&oebps_path) {
+        let mime_type = mime_guess::from_path(&oebps_path).first_or_octet_stream();
+        let response = axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+            .body(axum::body::Body::from(content))
+            .unwrap();
+        return Ok(response);
+    }
+    
+    // 3. Try with lowercase oebps/ prefix
+    let oebps_lower_path = format!("oebps/{}", normalized_path);
+    if let Some(content) = doc.get_resource_by_path(&oebps_lower_path) {
+        let mime_type = mime_guess::from_path(&oebps_lower_path).first_or_octet_stream();
+        let response = axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+            .body(axum::body::Body::from(content))
+            .unwrap();
+        return Ok(response);
+    }
+    
+    // 4. Try with leading /
+    let leading_slash_path = format!("/{}", normalized_path);
+    if let Some(content) = doc.get_resource_by_path(&leading_slash_path) {
+        let mime_type = mime_guess::from_path(&leading_slash_path).first_or_octet_stream();
+        let response = axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+            .body(axum::body::Body::from(content))
+            .unwrap();
+        return Ok(response);
+    }
+    
+    // If none of the above worked, return 404
+    Err((
+        StatusCode::NOT_FOUND,
+        Json(json!({ "error": "Resource not found" })),
+    ))
+}
+
+
 
 pub async fn get_book_chapters(
     State(state): State<AppState>,
