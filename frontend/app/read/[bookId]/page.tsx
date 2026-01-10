@@ -19,6 +19,8 @@ export default function ReadPage() {
   const [chapterContent, setChapterContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [stateLoaded, setStateLoaded] = useState<boolean>(false); // New state to track if reading state is loaded
+  const [isFirstLoad, setIsFirstLoad] = useState<boolean>(true); // New state to track if it's first load
+  const isTocManualNavigateRef = useRef<boolean>(false); // Use ref instead of state for synchronous updates
   const [error, setError] = useState<string | null>(null);
   const [chapterContentError, setChapterContentError] = useState<string | null>(
     null
@@ -139,9 +141,11 @@ export default function ReadPage() {
           content = content.replace(/href="([^http][^"]+)"/g, `href="${resourceBaseUrl}$1"`);
           
           setChapterContent(content);
+          setIsFirstLoad(false); // Set isFirstLoad to false after first content load
         } catch (err: any) {
           setChapterContentError(err.message);
           setChapterContent(""); // Clear content on error
+          setIsFirstLoad(false); // Set isFirstLoad to false even if there's an error
         } finally {
           setLoading(false);
         }
@@ -171,25 +175,28 @@ export default function ReadPage() {
     updateReadingState();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
-  // Auto-scroll to current chapter in sidebar when TOC opens or chapter changes
+  // Auto-scroll to current chapter in sidebar when TOC opens or chapter changes automatically
   useEffect(() => {
-    if (isTocOpen && currentChapterRef.current && tocRef.current) {
+    // Only scroll if it's not manual navigation from TOC, or it's first load
+    if ((isFirstLoad || !isTocManualNavigateRef.current) && isTocOpen && currentChapterRef.current && tocRef.current) {
       const sidebar = tocRef.current;
       const currentChapterElement = currentChapterRef.current;
 
       const elementTop = currentChapterElement.offsetTop;
       const elementHeight = currentChapterElement.offsetHeight;
-      const sidebarHeight = sidebar.clientHeight;
-
-      // Calculate the position to scroll to
-      const elementPosition = elementTop - sidebar.offsetTop;
-      const middlePosition =
-        elementPosition - sidebarHeight / 2 + elementHeight / 2;
+      
+      // Calculate the position to scroll to: scroll to top with offset (80px for header)
+      // Add some extra offset to ensure it's not covered
+      const offset = 80;
+      const scrollPosition = elementTop - offset;
 
       // Scroll to position without animation
-      sidebar.scrollTop = middlePosition;
+      sidebar.scrollTop = Math.max(0, scrollPosition);
     }
-  }, [currentChapterIndex, chapters.length, isTocOpen]); // Added isTocOpen to dependencies
+    
+    // Reset manual navigation flag after scrolling
+    isTocManualNavigateRef.current = false;
+  }, [currentChapterIndex, chapters.length, isTocOpen, isFirstLoad]); // Removed isTocManualNavigate from dependencies
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -209,9 +216,11 @@ export default function ReadPage() {
     }
   };
 
-  if (loading && (!stateLoaded || chapters.length === 0)) {
+  const isAllDataLoaded = stateLoaded && chapters.length > 0 && chapterContent !== "";
+  
+  if (isFirstLoad && (!isAllDataLoaded || loading)) {
     return (
-      <div className="py-8">
+      <div className="min-h-screen py-8">
         <div className="max-w-3xl mx-auto px-4">Loading book...</div>
       </div>
     );
@@ -219,7 +228,7 @@ export default function ReadPage() {
 
   if (error) {
     return (
-      <div className="py-8">
+      <div className="min-h-screen py-8">
         <div className="max-w-3xl mx-auto px-4 text-red-500">
           Error: {error}
         </div>
@@ -258,6 +267,8 @@ export default function ReadPage() {
                     >
                       <button
                         onClick={() => {
+                          // Set manual navigation flag to prevent scrolling using ref (synchronous update)
+                          isTocManualNavigateRef.current = true;
                           // Find the index of this TOC chapter in the full reading order
                           const targetIndex = chapters.findIndex(
                             (chap) => chap.path === tocChapter.path
