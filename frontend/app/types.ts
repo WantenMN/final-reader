@@ -11,4 +11,5 @@ export interface Chapter {
   id: string;
   title: string;
   path: string;
+  level: number;
 }

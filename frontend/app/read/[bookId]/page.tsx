@@ -13,7 +13,8 @@ export default function ReadPage() {
   const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } =
     useReadStore(); // Added useReadStore properties
 
-  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]); // Full reading order for navigation
+  const [tocChapters, setTocChapters] = useState<Chapter[]>([]); // TOC from toc.ncx for display
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
   const [chapterContent, setChapterContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
@@ -36,7 +37,7 @@ export default function ReadPage() {
       setStateLoaded(false); // Reset stateLoaded when starting to fetch
 
       try {
-        // 1. Fetch chapters
+        // 1. Fetch full reading order chapters (for navigation)
         const chaptersResponse = await fetch(
           `${API_URL}/api/books/${bookId}/chapters`
         );
@@ -46,7 +47,19 @@ export default function ReadPage() {
         const fetchedChapters: Chapter[] = await chaptersResponse.json();
         setChapters(fetchedChapters);
 
-        // 2. Load state and determine current chapter
+        // 2. Fetch TOC chapters (for display in sidebar)
+        const tocResponse = await fetch(
+          `${API_URL}/api/books/${bookId}/toc`
+        );
+        if (tocResponse.ok) {
+          const fetchedTocChapters: Chapter[] = await tocResponse.json();
+          setTocChapters(fetchedTocChapters);
+        } else {
+          console.warn("Failed to fetch TOC, using full chapters as fallback");
+          setTocChapters(fetchedChapters); // Fallback to full chapters if TOC fails
+        }
+
+        // 3. Load state and determine current chapter
         let initialChapterIndex = 0;
         try {
           const stateResponse = await fetch(
@@ -56,7 +69,7 @@ export default function ReadPage() {
             const readingState = await stateResponse.json();
             const savedPosition = readingState.position;
             if (savedPosition) {
-              // 2.1 If state exists, find the corresponding chapter
+              // 3.1 If state exists, find the corresponding chapter in full reading order
               const savedChapterIndex = fetchedChapters.findIndex(
                 (chap) => chap.path === savedPosition
               );
@@ -70,7 +83,7 @@ export default function ReadPage() {
             "No saved reading state found or failed to fetch state:",
             stateError
           );
-          // 2.2 If no state, continue with default (first chapter)
+          // 3.2 If no state, continue with default (first chapter)
         }
 
         // Set the current chapter index based on state or default to first
@@ -213,28 +226,44 @@ export default function ReadPage() {
             <h2 className="text-xl font-bold mb-4">Chapters</h2>
             <nav>
               <ul>
-                {chapters.map((chapter, index) => (
-                  <li
-                    key={index}
-                    ref={
-                      index === currentChapterIndex ? currentChapterRef : null
-                    }
-                    className="mb-2"
-                  >
-                    <button
-                      onClick={() => setCurrentChapterIndex(index)}
-                      className={`text-left w-full p-2 rounded-md cursor-pointer ${
-                        index === currentChapterIndex
-                          ? "bg-blue-500 text-white"
-                          : "hover:bg-gray-200"
-                      }`}
+                {tocChapters.map((tocChapter, tocIndex) => {
+                  // Find if this TOC chapter is the current one being displayed
+                  const isCurrentChapter = chapters[currentChapterIndex]?.path === tocChapter.path;
+                  
+                  return (
+                    <li
+                      key={tocIndex}
+                      ref={
+                        isCurrentChapter ? currentChapterRef : null
+                      }
+                      className="mb-2"
                     >
-                      {chapter.title}
-                    </button>
-                  </li>
-                ))}
+                      <button
+                        onClick={() => {
+                          // Find the index of this TOC chapter in the full reading order
+                          const targetIndex = chapters.findIndex(
+                            (chap) => chap.path === tocChapter.path
+                          );
+                          if (targetIndex !== -1) {
+                            setCurrentChapterIndex(targetIndex);
+                          }
+                        }}
+                        className={`text-left w-full p-2 rounded-md cursor-pointer ${
+                          isCurrentChapter
+                            ? "bg-blue-500 text-white"
+                            : "hover:bg-gray-200"
+                        }`}
+                        style={{ 
+                          paddingLeft: `${tocChapter.level * 16 + 8}px` // Add indentation based on level
+                        }}
+                      >
+                        {tocChapter.title}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
-            </nav>{" "}
+            </nav>{' '}
           </div>
         )}
         {/* Main content area */}

@@ -19,6 +19,7 @@ pub struct Chapter {
     pub id: String,
     pub title: String,
     pub path: String,
+    pub level: u8,
 }
 
 #[derive(Deserialize)]
@@ -103,45 +104,144 @@ pub async fn get_book_chapters(
     };
 
     let mut chapters = Vec::new();
-    if doc.toc.is_empty() {
-        // Fallback: If no TOC, generate chapters from resources
-        let mut xhtml_resources: Vec<(String, epub::doc::ResourceItem)> = doc
-            .resources
-            .into_iter()
-            .filter(|(_, item)| item.mime == "application/xhtml+xml")
-            .collect();
-
-        // Sort resources by their id to ensure correct reading order
-        xhtml_resources.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let mut chapter_count = 1;
-        for (id, resource_item) in xhtml_resources {
-            chapters.push(Chapter {
-                id: id,
-                title: format!("Chapter {}", chapter_count), // Generic title
-                path: resource_item.path.to_string_lossy().replace('\\', "/"),
-            });
-            chapter_count += 1;
+    
+    // Try to use spine for complete reading order (content.opf)
+    // First, collect all TOC entries for title lookup
+    let mut toc_entries: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for item in doc.toc.iter() {
+        collect_toc_entries(item, &mut toc_entries);
+    }
+    
+    // Create a complete reading order by combining spine and TOC
+    let mut reading_order: Vec<String> = Vec::new();
+    let mut processed_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    
+    // First, add all resources with application/xhtml+xml mime type (from content.opf)
+    let mut xhtml_resources: Vec<(String, epub::doc::ResourceItem)> = doc
+        .resources
+        .clone()
+        .into_iter()
+        .filter(|(_, item)| item.mime == "application/xhtml+xml")
+        .collect();
+    
+    // Sort resources by their id to get consistent order (approximate spine order)
+    xhtml_resources.sort_by(|a, b| a.0.cmp(&b.0));
+    
+    for (_, resource_item) in xhtml_resources {
+        let path = resource_item.path.to_string_lossy().replace('\\', "/");
+        if !processed_paths.contains(&path) {
+            reading_order.push(path.clone());
+            processed_paths.insert(path);
         }
-    } else {
-        // Original logic: use TOC
-        for item in doc.toc.iter() {
-            flatten_nav_points(item, &mut chapters);
-        }
+    }
+    
+    // Now add any remaining TOC entries that might be missing
+    for item in doc.toc.iter() {
+        add_toc_to_reading_order(item, &mut reading_order, &mut processed_paths);
+    }
+    
+    // Generate chapters from the complete reading order
+    let mut chapter_count = 1;
+    for path in reading_order {
+        // Lookup title from TOC, otherwise use generic title
+        let title = toc_entries
+            .get(&path)
+            .cloned()
+            .unwrap_or_else(|| format!("Chapter {}", chapter_count));
+        
+        chapters.push(Chapter {
+            id: path.clone(),
+            title,
+            path,
+            level: 0,
+        });
+        chapter_count += 1;
     }
 
     Ok(Json(chapters))
 }
 
-fn flatten_nav_points(nav_point: &epub::doc::NavPoint, chapters: &mut Vec<Chapter>) {
-    chapters.push(Chapter {
-        id: nav_point.content.to_string_lossy().to_string(),
-        title: nav_point.label.clone(),
-        path: nav_point.content.to_string_lossy().replace('\\', "/"),
-    });
+// Get only TOC entries from toc.ncx for frontend table of contents display
+pub async fn get_book_toc(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<Chapter>>, (StatusCode, Json<Value>)> {
+    println!("GET /api/books/{}/toc", id);
+    let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(book) => book,
+        Err(e) => {
+            eprintln!("Failed to fetch book: {}", e);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Book not found" })),
+            ));
+        }
+    };
 
+    let doc = match EpubDoc::new(&book.path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            eprintln!("Failed to parse epub {}: {}", book.path, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to parse epub" })),
+            ));
+        }
+    };
+
+    let mut toc_chapters = Vec::new();
+    
+    // Only use TOC entries from toc.ncx, preserving original structure with level information
+    for item in doc.toc.iter() {
+        collect_toc_chapters(item, &mut toc_chapters, 0);
+    }
+
+    Ok(Json(toc_chapters))
+}
+
+// Collect only TOC entries into chapters list with level information
+fn collect_toc_chapters(nav_point: &epub::doc::NavPoint, chapters: &mut Vec<Chapter>, level: u8) {
+    let path = nav_point.content.to_string_lossy().replace('\\', "/");
+    chapters.push(Chapter {
+        id: path.clone(),
+        title: nav_point.label.clone(),
+        path,
+        level,
+    });
+    
     for child in nav_point.children.iter() {
-        flatten_nav_points(child, chapters);
+        collect_toc_chapters(child, chapters, level + 1);
+    }
+}
+
+// Collect TOC entries into a hash map for quick lookup
+fn collect_toc_entries(nav_point: &epub::doc::NavPoint, toc_entries: &mut std::collections::HashMap<String, String>) {
+    let path = nav_point.content.to_string_lossy().replace('\\', "/");
+    toc_entries.insert(path, nav_point.label.clone());
+    
+    for child in nav_point.children.iter() {
+        collect_toc_entries(child, toc_entries);
+    }
+}
+
+// Add TOC entries to reading order if they're not already present
+fn add_toc_to_reading_order(
+    nav_point: &epub::doc::NavPoint,
+    reading_order: &mut Vec<String>,
+    processed_paths: &mut std::collections::HashSet<String>
+) {
+    let path = nav_point.content.to_string_lossy().replace('\\', "/");
+    if !processed_paths.contains(&path) {
+        reading_order.push(path.clone());
+        processed_paths.insert(path);
+    }
+    
+    for child in nav_point.children.iter() {
+        add_toc_to_reading_order(child, reading_order, processed_paths);
     }
 }
 
