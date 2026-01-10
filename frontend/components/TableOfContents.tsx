@@ -6,20 +6,20 @@ interface TableOfContentsProps {
   tocChapters: Chapter[];
   chapters: Chapter[];
   currentChapterIndex: number;
-  currentChapterPath: string;
   isTocOpen: boolean;
   onChapterClick: (targetIndex: number) => void;
-  currentChapterRef: React.Ref<HTMLLIElement>; // Use Ref instead of RefObject to accept any ref type
+  currentChapterRef: React.RefObject<HTMLLIElement | null>; // Allow null in the RefObject type
+  isManualNavigation?: boolean; // New prop to control scrolling behavior
 }
 
 export default function TableOfContents({
   tocChapters,
   chapters,
   currentChapterIndex,
-  currentChapterPath,
   isTocOpen,
   onChapterClick,
   currentChapterRef,
+  isManualNavigation = false, // Add default value for the new prop
 }: TableOfContentsProps) {
   const tocRef = useRef<HTMLDivElement>(null);
   // State to track expanded/collapsed chapters
@@ -42,7 +42,7 @@ export default function TableOfContents({
   };
   
   // Get all parent chapters of a given chapter
-  const getParentChapters = (targetChapter: Chapter | undefined) => {
+  const getParentChapters = React.useCallback((targetChapter: Chapter | undefined) => {
     if (!targetChapter) return [];
     
     const parents: Chapter[] = [];
@@ -64,7 +64,7 @@ export default function TableOfContents({
     }
     
     return parents;
-  };
+  }, [tocChapters]);
   
   // Auto-expand parent chapters when current chapter changes
   React.useEffect(() => {
@@ -83,7 +83,7 @@ export default function TableOfContents({
         });
       }
     }
-  }, [currentChapterIndex, chapters, tocChapters]);
+  }, [currentChapterIndex, chapters, tocChapters, getParentChapters]);
 
   // Check if a chapter should be expanded
   const isChapterExpanded = (chapterPath: string) => {
@@ -140,6 +140,34 @@ export default function TableOfContents({
     const { nested } = getNestedChapters();
     return nested[chapter.path] || [];
   };
+  
+  // Auto-scroll to current chapter after it has been expanded
+  React.useEffect(() => {
+    // Only scroll if the navigation wasn't initiated from the TOC itself
+    if (isTocOpen && currentChapterRef && currentChapterRef.current && !isManualNavigation) {
+      const currentChapterElement = currentChapterRef.current;
+      const sidebar = tocRef.current;
+      
+      if (sidebar && currentChapterElement) {
+        // Wait for the DOM to update with the expanded chapters
+        setTimeout(() => {
+          // Calculate the position to scroll to - add offset for header
+          const offset = 60;
+          const elementTop = currentChapterElement.offsetTop;
+          const scrollPosition = elementTop - offset;
+          
+          // Use smooth scroll behavior
+          sidebar.style.scrollBehavior = 'smooth';
+          // Ensure the scroll position doesn't go negative
+          sidebar.scrollTop = Math.max(0, scrollPosition);
+          // Reset to auto behavior after scrolling to prevent interference with manual scrolling
+          setTimeout(() => {
+            sidebar.style.scrollBehavior = 'auto';
+          }, 1000);
+        }, 0); // Use setTimeout to ensure DOM has updated
+      }
+    }
+  }, [isTocOpen, currentChapterIndex, expandedChapters, currentChapterRef, isManualNavigation]); // Add isManualNavigation to dependencies
   
   // Render TOC chapters recursively with nested structure
   const renderTocChapters = () => {

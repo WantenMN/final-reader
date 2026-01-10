@@ -32,6 +32,8 @@ export default function ReadPage() {
   const currentChapterRef = useRef<HTMLLIElement>(null);
   // Add ref for chapter content container to handle link clicks
   const contentContainerRef = useRef<HTMLDivElement>(null);
+  // State to track if navigation was initiated from TOC (for scrolling behavior)
+  const [isManualNavigation, setIsManualNavigation] = useState<boolean>(false);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -286,33 +288,6 @@ export default function ReadPage() {
     updateReadingState();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
-  // Auto-scroll to current chapter in sidebar when TOC opens or chapter changes automatically
-  useEffect(() => {
-    // Only scroll if it's not manual navigation from TOC, or it's first load
-    if ((isFirstLoad || !isTocManualNavigateRef.current) && isTocOpen && currentChapterRef.current) {
-      // Get the sidebar container (parent of currentChapterElement) - use more reliable selector
-      const currentChapterElement = currentChapterRef.current;
-      // Use a more specific selector that won't be affected by width changes
-      const sidebar = currentChapterElement.closest('[class*="overflow-y-auto"]');
-      
-      if (sidebar) {
-        const elementTop = currentChapterElement.offsetTop;
-        const elementHeight = currentChapterElement.offsetHeight;
-        
-        // Calculate the position to scroll to: scroll to top with offset (80px for header)
-        // Add some extra offset to ensure it's not covered
-        const offset = 60;
-        const scrollPosition = elementTop - offset;
-
-        // Scroll to position without animation
-        sidebar.scrollTop = Math.max(0, scrollPosition);
-      }
-    }
-    
-    // Reset manual navigation flag after scrolling
-    isTocManualNavigateRef.current = false;
-  }, [currentChapterIndex, chapters.length, isTocOpen, isFirstLoad]); // Removed isTocManualNavigate from dependencies
-
   // Add useEffect to handle link clicks in chapter content
   useEffect(() => {
     // Scroll to top when chapter content changes
@@ -341,6 +316,8 @@ export default function ReadPage() {
           if (targetIndex !== -1) {
             // Set manual navigation flag to prevent scrolling using ref
             isTocManualNavigateRef.current = true;
+            // When navigating via content links, we want to scroll the TOC
+            setIsManualNavigation(false);
             // Navigate to the target chapter
             setCurrentChapterIndex(targetIndex);
           } else {
@@ -352,6 +329,8 @@ export default function ReadPage() {
               );
               if (altTargetIndex !== -1) {
                 isTocManualNavigateRef.current = true;
+                // When navigating via content links, we want to scroll the TOC
+                setIsManualNavigation(false);
                 setCurrentChapterIndex(altTargetIndex);
               }
             }
@@ -375,12 +354,16 @@ export default function ReadPage() {
 
   const goToPreviousChapter = () => {
     if (currentChapterIndex > 0) {
+      // When navigating via buttons, we want to scroll the TOC
+      setIsManualNavigation(false);
       setCurrentChapterIndex(currentChapterIndex - 1);
     }
   };
 
   const goToNextChapter = () => {
     if (currentChapterIndex < chapters.length - 1) {
+      // When navigating via buttons, we want to scroll the TOC
+      setIsManualNavigation(false);
       setCurrentChapterIndex(currentChapterIndex + 1);
     }
   };
@@ -418,14 +401,16 @@ export default function ReadPage() {
           tocChapters={tocChapters}
           chapters={chapters}
           currentChapterIndex={currentChapterIndex}
-          currentChapterPath={chapters[currentChapterIndex]?.path || ''}
           isTocOpen={isTocOpen}
           onChapterClick={(targetIndex) => {
             // Set manual navigation flag to prevent scrolling using ref (synchronous update)
             isTocManualNavigateRef.current = true;
+            // When navigating via TOC, we don't want to scroll the TOC
+            setIsManualNavigation(true);
             setCurrentChapterIndex(targetIndex);
           }}
           currentChapterRef={currentChapterRef}
+          isManualNavigation={isManualNavigation}
         />
         {/* Main content area */}
         <div className={`grow p-4 pt-20 transition-all duration-300 ${isTocOpen ? 'ml-76' : 'ml-0'}`}>
