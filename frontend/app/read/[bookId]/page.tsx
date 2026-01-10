@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/constants";
 import type { Chapter } from "@/app/types";
 import ReadHeader from "@/components/ReadHeader"; // Added import
+import TableOfContents from "@/components/TableOfContents"; // Added import for new TOC component
 import { useReadStore } from "@/lib/store"; // Added import
 
 export default function ReadPage() {
@@ -27,7 +28,7 @@ export default function ReadPage() {
   );
   // Removed initialScrollDone state
 
-  const tocRef = useRef<HTMLDivElement>(null);
+  // Only keep currentChapterRef, tocRef is now managed inside TableOfContents component
   const currentChapterRef = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -178,20 +179,24 @@ export default function ReadPage() {
   // Auto-scroll to current chapter in sidebar when TOC opens or chapter changes automatically
   useEffect(() => {
     // Only scroll if it's not manual navigation from TOC, or it's first load
-    if ((isFirstLoad || !isTocManualNavigateRef.current) && isTocOpen && currentChapterRef.current && tocRef.current) {
-      const sidebar = tocRef.current;
+    if ((isFirstLoad || !isTocManualNavigateRef.current) && isTocOpen && currentChapterRef.current) {
+      // Get the sidebar container (parent of currentChapterElement) - use more reliable selector
       const currentChapterElement = currentChapterRef.current;
-
-      const elementTop = currentChapterElement.offsetTop;
-      const elementHeight = currentChapterElement.offsetHeight;
+      // Use a more specific selector that won't be affected by width changes
+      const sidebar = currentChapterElement.closest('[class*="overflow-y-auto"]');
       
-      // Calculate the position to scroll to: scroll to top with offset (80px for header)
-      // Add some extra offset to ensure it's not covered
-      const offset = 80;
-      const scrollPosition = elementTop - offset;
+      if (sidebar) {
+        const elementTop = currentChapterElement.offsetTop;
+        const elementHeight = currentChapterElement.offsetHeight;
+        
+        // Calculate the position to scroll to: scroll to top with offset (80px for header)
+        // Add some extra offset to ensure it's not covered
+        const offset = 80;
+        const scrollPosition = elementTop - offset;
 
-      // Scroll to position without animation
-      sidebar.scrollTop = Math.max(0, scrollPosition);
+        // Scroll to position without animation
+        sidebar.scrollTop = Math.max(0, scrollPosition);
+      }
     }
     
     // Reset manual navigation flag after scrolling
@@ -244,57 +249,20 @@ export default function ReadPage() {
     <>
       <ReadHeader />
       <div className="flex">
-        {/* Left sidebar for table of contents */}
-        {isTocOpen && ( // Conditional rendering based on isTocOpen
-          <div
-            ref={tocRef}
-            className="w-64 p-4 border-r h-screen overflow-y-auto sticky top-0 pt-20"
-          >
-            <h2 className="text-xl font-bold mb-4">Chapters</h2>
-            <nav>
-              <ul>
-                {tocChapters.map((tocChapter, tocIndex) => {
-                  // Find if this TOC chapter is the current one being displayed
-                  const isCurrentChapter = chapters[currentChapterIndex]?.path === tocChapter.path;
-                  
-                  return (
-                    <li
-                      key={tocIndex}
-                      ref={
-                        isCurrentChapter ? currentChapterRef : null
-                      }
-                      className="mb-2"
-                    >
-                      <button
-                        onClick={() => {
-                          // Set manual navigation flag to prevent scrolling using ref (synchronous update)
-                          isTocManualNavigateRef.current = true;
-                          // Find the index of this TOC chapter in the full reading order
-                          const targetIndex = chapters.findIndex(
-                            (chap) => chap.path === tocChapter.path
-                          );
-                          if (targetIndex !== -1) {
-                            setCurrentChapterIndex(targetIndex);
-                          }
-                        }}
-                        className={`text-left w-full p-2 rounded-md cursor-pointer ${
-                          isCurrentChapter
-                            ? "bg-blue-500 text-white"
-                            : "hover:bg-gray-200"
-                        }`}
-                        style={{ 
-                          paddingLeft: `${tocChapter.level * 16 + 8}px` // Add indentation based on level
-                        }}
-                      >
-                        {tocChapter.title}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </nav>{' '}
-          </div>
-        )}
+        {/* Left sidebar for table of contents - Using new component */}
+        <TableOfContents
+          tocChapters={tocChapters}
+          chapters={chapters}
+          currentChapterIndex={currentChapterIndex}
+          currentChapterPath={chapters[currentChapterIndex]?.path || ''}
+          isTocOpen={isTocOpen}
+          onChapterClick={(targetIndex) => {
+            // Set manual navigation flag to prevent scrolling using ref (synchronous update)
+            isTocManualNavigateRef.current = true;
+            setCurrentChapterIndex(targetIndex);
+          }}
+          currentChapterRef={currentChapterRef}
+        />
         {/* Main content area */}
         <div className="grow p-4 pt-20">
           {chapterContentError ? (
