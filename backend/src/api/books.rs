@@ -520,3 +520,58 @@ pub async fn import_books(
 
     Ok(Json(imported_books))
 }
+
+// Add a new endpoint to serve book cover images
+pub async fn get_book_cover(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<axum::response::Response, (StatusCode, Json<Value>)> {
+    println!("GET /api/books/{}/cover", id);
+    let book = match sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
+        .bind(id)
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(book) => book,
+        Err(e) => {
+            eprintln!("Failed to fetch book: {}", e);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Book not found" })),
+            ));
+        }
+    };
+
+    // Check if cover_path exists
+    let cover_path = match book.cover_path {
+        Some(path) => path,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Cover not found" })),
+            ));
+        }
+    };
+
+    // Read cover file
+    let cover_data = match fs::read(&cover_path).await {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("Failed to read cover file {}: {}", cover_path, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to read cover file" })),
+            ));
+        }
+    };
+
+    // Determine MIME type from file extension
+    let mime_type = mime_guess::from_path(&cover_path).first_or_octet_stream();
+    let response = axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+        .body(axum::body::Body::from(cover_data))
+        .unwrap();
+    
+    Ok(response)
+}
