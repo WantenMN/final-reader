@@ -143,6 +143,114 @@ export default function ReadPage() {
           // Handle href attributes
           content = content.replace(/href="([^http][^"]+)"/g, `href="${resourceBaseUrl}$1"`);
           
+          // Process styles to isolate them within the chapter container
+          const chapterContainerId = 'book-chapter-content';
+          
+          // Step 1: Process inline style tags
+          content = content.replace(/<style([^>]*)>([\s\S]*?)<\/style>/g, (match, attrs, css) => {
+            // Add container prefix to all CSS selectors
+            const scopedCss = css.replace(/([^{}]+)(?=\s*{)/g, (selector: string) => {
+              // Skip comments and@media rules
+              if (selector.trim().startsWith('/*') || selector.trim().startsWith('@media')) {
+                return selector;
+              }
+              // Add container ID to each selector, but make it less specific than user settings
+              // Remove any font-size, line-height, or margin-bottom properties that might conflict with user settings
+              return selector.split(',').map((sel: string) => {
+                const trimmedSel = sel.trim();
+                if (trimmedSel) {
+                  return `#${chapterContainerId} ${trimmedSel}`;
+                }
+                return '';
+              }).join(',');
+            }).replace(/font-size:\s*[^;}]+;?/gi, '')
+              .replace(/line-height:\s*[^;}]+;?/gi, '')
+              .replace(/margin-bottom:\s*[^;}]+;?/gi, ''); // Remove margin-bottom to let our paragraph spacing take precedence
+            return `<style${attrs}>${scopedCss}</style>`;
+          });
+          
+          // Step 2: Process link tags - we'll need to fetch and modify external CSS
+          // Use a more flexible regex that handles different attribute orders and quotes
+          const linkRegex = /<link[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["'][^>]*>/gi;
+          const linkRegexAlt = /<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+          
+          const stylePromises: Array<Promise<{ linkTag: string; css: string }>> = [];
+          const allLinkTags = new Set<string>();
+          
+          // Function to process link tags with a given regex
+          const processLinkTags = (regex: RegExp) => {
+            let match;
+            while ((match = regex.exec(content)) !== null) {
+              const linkTag = match[0];
+              allLinkTags.add(linkTag);
+              const cssUrl = match[1];
+              let absoluteCssUrl = cssUrl;
+              
+              // Convert relative URLs to absolute
+              if (!cssUrl.startsWith('http://') && !cssUrl.startsWith('https://')) {
+                absoluteCssUrl = `${resourceBaseUrl}${cssUrl.replace(/^\.\//, '').replace(/^\.\.\//, '')}`;
+              }
+              
+              // Fetch and process external CSS
+              const stylePromise = fetch(absoluteCssUrl)
+                .then(response => response.text())
+                .then(css => {
+                  // Add container prefix to all CSS selectors
+                  const scopedCss = css.replace(/([^{}]+)(?=\s*{)/g, (selector: string) => {
+                    // Skip comments and@media rules
+                    if (selector.trim().startsWith('/*') || selector.trim().startsWith('@media')) {
+                      return selector;
+                    }
+                    // Add container ID to each selector
+                    return selector.split(',').map((sel: string) => {
+                      const trimmedSel = sel.trim();
+                      if (trimmedSel) {
+                        return `#${chapterContainerId} ${trimmedSel}`;
+                      }
+                      return '';
+                    }).join(',');
+                  })
+                  // Remove any font-size, line-height, or margin-bottom properties that might conflict with user settings
+                  .replace(/font-size:\s*[^;}]+;?/gi, '')
+                  .replace(/line-height:\s*[^;}]+;?/gi, '')
+                  .replace(/margin-bottom:\s*[^;}]+;?/gi, '');
+                  return { linkTag, css: scopedCss };
+                })
+                .catch(error => {
+                  console.error(`Failed to fetch CSS from ${cssUrl}:`, error);
+                  return { linkTag, css: '' };
+                });
+              
+              stylePromises.push(stylePromise);
+            }
+          };
+          
+          // Process both regex patterns to catch all link stylesheets
+          processLinkTags(linkRegex);
+          processLinkTags(linkRegexAlt);
+          
+          // If there are external styles, fetch them and replace link tags with style tags
+          if (stylePromises.length > 0) {
+            const externalStylesResult = await Promise.all(stylePromises);
+            const combinedExternalCss = externalStylesResult.map(result => result.css).join('\n');
+            
+            // Remove all link tags
+            let updatedContent = content;
+            allLinkTags.forEach(linkTag => {
+              updatedContent = updatedContent.replace(linkTag, '');
+            });
+            
+            // Insert combined styles at the end of head or beginning of body
+            if (updatedContent.includes('</head>')) {
+              updatedContent = updatedContent.replace(/<\/head>/i, `<style>${combinedExternalCss}</style></head>`);
+            } else {
+              // If no head tag, add styles at the beginning of content
+              updatedContent = `<style>${combinedExternalCss}</style>${updatedContent}`;
+            }
+            
+            content = updatedContent;
+          }
+          
           setChapterContent(content);
           setIsFirstLoad(false); // Set isFirstLoad to false after first content load
         } catch (err: any) {
@@ -331,12 +439,15 @@ export default function ReadPage() {
               {/* Added wrapper div */}
               <div
                 ref={contentContainerRef}
+                id="book-chapter-content"
                 className="prose lg:prose-lg"
                 style={
                   {
                     fontSize: `${fontSize}px`,
                     lineHeight: `${lineHeight}`,
-                    // Use a CSS variable for paragraph spacing that can be targeted in global.css
+                    // Use CSS variables for user settings that can be referenced by global styles
+                    "--user-font-size": `${fontSize}px`,
+                    "--user-line-height": lineHeight,
                     "--paragraph-spacing-multiplier": paragraphSpacing,
                   } as React.CSSProperties
                 }

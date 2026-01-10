@@ -23,11 +23,11 @@ export default function ReadHeader() {
   const increaseFontSize = () => setFontSize(Math.min(fontSize + 1, 32));
   const decreaseFontSize = () => setFontSize(Math.max(fontSize - 1, 12));
 
-  const increaseLineHeight = () => setLineHeight(Math.min(lineHeight + 0.1, 2.5));
-  const decreaseLineHeight = () => setLineHeight(Math.max(lineHeight - 0.1, 1.0));
+  const increaseLineHeight = () => setLineHeight(Math.min(lineHeight + 0.2, 3.0));
+  const decreaseLineHeight = () => setLineHeight(Math.max(lineHeight - 0.2, 1.0));
 
-  const increaseParagraphSpacing = () => setParagraphSpacing(Math.min(paragraphSpacing + 0.1, 2.0));
-  const decreaseParagraphSpacing = () => setParagraphSpacing(Math.max(paragraphSpacing - 0.1, 0.5));
+  const increaseParagraphSpacing = () => setParagraphSpacing(Math.min(paragraphSpacing + 0.2, 3.0));
+  const decreaseParagraphSpacing = () => setParagraphSpacing(Math.max(paragraphSpacing - 0.2, 0.5));
 
   const increaseContentWidth = () => setContentWidth(Math.min(contentWidth + 100, 1400));
   const decreaseContentWidth = () => setContentWidth(Math.max(contentWidth - 100, 600));
