@@ -30,6 +30,8 @@ export default function ReadPage() {
 
   // Only keep currentChapterRef, tocRef is now managed inside TableOfContents component
   const currentChapterRef = useRef<HTMLLIElement>(null);
+  // Add ref for chapter content container to handle link clicks
+  const contentContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -203,11 +205,65 @@ export default function ReadPage() {
     isTocManualNavigateRef.current = false;
   }, [currentChapterIndex, chapters.length, isTocOpen, isFirstLoad]); // Removed isTocManualNavigate from dependencies
 
+  // Add useEffect to handle link clicks in chapter content
   useEffect(() => {
+    // Scroll to top when chapter content changes
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0 });
     }
-  }, [chapterContent]);
+    
+    // Get all links in the content container and add click event listeners
+    const contentContainer = contentContainerRef.current;
+    if (contentContainer) {
+      const links = contentContainer.querySelectorAll('a');
+      
+      const handleLinkClick = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const link = e.target as HTMLAnchorElement;
+        const href = link.getAttribute('href');
+        if (href) {
+          // Extract the path part before the anchor (if any)
+          const path = href.split('#')[0];
+          
+          // Find the corresponding chapter in the full reading order
+          const targetIndex = chapters.findIndex((chap) => chap.path === path);
+          
+          if (targetIndex !== -1) {
+            // Set manual navigation flag to prevent scrolling using ref
+            isTocManualNavigateRef.current = true;
+            // Navigate to the target chapter
+            setCurrentChapterIndex(targetIndex);
+          } else {
+            // Try to find by matching just the filename part
+            const filename = path.split('/').pop();
+            if (filename) {
+              const altTargetIndex = chapters.findIndex((chap) => 
+                chap.path.split('/').pop() === filename
+              );
+              if (altTargetIndex !== -1) {
+                isTocManualNavigateRef.current = true;
+                setCurrentChapterIndex(altTargetIndex);
+              }
+            }
+          }
+        }
+      };
+      
+      // Add event listener to each link
+      links.forEach(link => {
+        link.addEventListener('click', handleLinkClick);
+      });
+      
+      // Clean up event listeners
+      return () => {
+        links.forEach(link => {
+          link.removeEventListener('click', handleLinkClick);
+        });
+      };
+    }
+  }, [chapterContent, chapters]);
 
   const goToPreviousChapter = () => {
     if (currentChapterIndex > 0) {
@@ -274,6 +330,7 @@ export default function ReadPage() {
               {" "}
               {/* Added wrapper div */}
               <div
+                ref={contentContainerRef}
                 className="prose lg:prose-lg"
                 style={
                   {
