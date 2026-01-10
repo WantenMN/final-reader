@@ -161,6 +161,151 @@ pub async fn get_book_resource(
         return Ok(response);
     }
     
+    // 5. Try with uppercase first letter (e.g., Images/ vs images/)
+    let parts: Vec<&str> = path_without_fragment.split('/').collect();
+    if !parts.is_empty() {
+        // Create a new Vec<String> to hold modified parts
+        let mut capitalized_parts: Vec<String> = Vec::new();
+        for (i, part) in parts.iter().enumerate() {
+            if i == 0 {
+                // Capitalize first letter of first part
+                if let Some(first_char) = part.chars().next() {
+                    let rest = &part[1..];
+                    let capitalized = format!("{}{}", first_char.to_uppercase(), rest);
+                    capitalized_parts.push(capitalized);
+                } else {
+                    capitalized_parts.push(part.to_string());
+                }
+            } else {
+                capitalized_parts.push(part.to_string());
+            }
+        }
+        let capitalized_path = capitalized_parts.join("/");
+        if let Some(content) = doc.get_resource_by_path(&capitalized_path) {
+            let mime_type = mime_guess::from_path(&capitalized_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+        
+        // Also try with OEBPS/ prefix for capitalized path
+        let oebps_capitalized_path = format!("OEBPS/{}", capitalized_path);
+        if let Some(content) = doc.get_resource_by_path(&oebps_capitalized_path) {
+            let mime_type = mime_guess::from_path(&oebps_capitalized_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+        
+        // Also try with lowercase oebps/ prefix for capitalized path
+        let oebps_lower_capitalized_path = format!("oebps/{}", capitalized_path);
+        if let Some(content) = doc.get_resource_by_path(&oebps_lower_capitalized_path) {
+            let mime_type = mime_guess::from_path(&oebps_lower_capitalized_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+    }
+    
+    // 6. Try with lowercase first letter (e.g., images/ vs Images/)
+    if !parts.is_empty() {
+        // Create a new Vec<String> to hold modified parts
+        let mut lowercase_parts: Vec<String> = Vec::new();
+        for (i, part) in parts.iter().enumerate() {
+            if i == 0 {
+                // Lowercase first letter of first part
+                if let Some(first_char) = part.chars().next() {
+                    let rest = &part[1..];
+                    let lowercase = format!("{}{}", first_char.to_lowercase(), rest);
+                    lowercase_parts.push(lowercase);
+                } else {
+                    lowercase_parts.push(part.to_string());
+                }
+            } else {
+                lowercase_parts.push(part.to_string());
+            }
+        }
+        let lowercase_path = lowercase_parts.join("/");
+        if let Some(content) = doc.get_resource_by_path(&lowercase_path) {
+            let mime_type = mime_guess::from_path(&lowercase_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+        
+        // Also try with OEBPS/ prefix for lowercase path
+        let oebps_lowercase_path = format!("OEBPS/{}", lowercase_path);
+        if let Some(content) = doc.get_resource_by_path(&oebps_lowercase_path) {
+            let mime_type = mime_guess::from_path(&oebps_lowercase_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+        
+        // Also try with lowercase oebps/ prefix for lowercase path
+        let oebps_lower_lowercase_path = format!("oebps/{}", lowercase_path);
+        if let Some(content) = doc.get_resource_by_path(&oebps_lower_lowercase_path) {
+            let mime_type = mime_guess::from_path(&oebps_lower_lowercase_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+    }
+    
+    // 7. Search through all resources by filename (last resort)
+    let filename = path_without_fragment.split('/').last().unwrap_or(path_without_fragment);
+    
+    // Collect all resource paths first to avoid borrowing conflicts
+    let mut resource_paths: Vec<String> = Vec::new();
+    for (_, resource_item) in doc.resources.iter() {
+        let resource_path = resource_item.path.to_string_lossy().replace('\\', "/");
+        let resource_filename = resource_path.split('/').last().unwrap_or(&resource_path);
+        // Compare filenames case-insensitively
+        if resource_filename.to_lowercase() == filename.to_lowercase() {
+            resource_paths.push(resource_path);
+        }
+    }
+    
+    // Now try to get the resource content for each matching path
+    for resource_path in resource_paths {
+        // Create a new EpubDoc instance to avoid borrowing conflicts
+        let mut doc_copy = match EpubDoc::new(&book.path) {
+            Ok(doc) => doc,
+            Err(e) => {
+                eprintln!("Failed to parse epub {} again: {}", book.path, e);
+                continue;
+            }
+        };
+        
+        if let Some(content) = doc_copy.get_resource_by_path(&resource_path) {
+            let mime_type = mime_guess::from_path(&resource_path).first_or_octet_stream();
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header(axum::http::header::CONTENT_TYPE, mime_type.to_string())
+                .body(axum::body::Body::from(content))
+                .unwrap();
+            return Ok(response);
+        }
+    }
+    
     // If none of the above worked, return 404
     Err((
         StatusCode::NOT_FOUND,
