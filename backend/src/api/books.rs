@@ -348,33 +348,47 @@ pub async fn get_book_chapters(
 
     let mut chapters = Vec::new();
     
-    // Try to use spine for complete reading order (content.opf)
-    // First, collect all TOC entries for title lookup
+    // Collect all TOC entries for title lookup
     let mut toc_entries: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for item in doc.toc.iter() {
         collect_toc_entries(item, &mut toc_entries);
     }
     
-    // Create a complete reading order by combining spine and TOC
+    // Create a complete reading order using spine (content.opf)
     let mut reading_order: Vec<String> = Vec::new();
     let mut processed_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
     
-    // First, add all resources with application/xhtml+xml mime type (from content.opf)
-    let mut xhtml_resources: Vec<(String, epub::doc::ResourceItem)> = doc
-        .resources
-        .clone()
-        .into_iter()
-        .filter(|(_, item)| item.mime == "application/xhtml+xml")
-        .collect();
+    // First, use the actual spine order from the EPUB
+    // The spine contains the correct reading order defined by the EPUB author
+    for spine_item in doc.spine.iter() {
+        // Use idref to find the corresponding resource in the resources map
+        if let Some(resource_item) = doc.resources.get(&spine_item.idref) {
+            let path = resource_item.path.to_string_lossy().replace('\\', "/");
+            if !processed_paths.contains(&path) {
+                reading_order.push(path.clone());
+                processed_paths.insert(path);
+            }
+        }
+    }
     
-    // Sort resources by their id to get consistent order (approximate spine order)
-    xhtml_resources.sort_by(|a, b| a.0.cmp(&b.0));
-    
-    for (_, resource_item) in xhtml_resources {
-        let path = resource_item.path.to_string_lossy().replace('\\', "/");
-        if !processed_paths.contains(&path) {
-            reading_order.push(path.clone());
-            processed_paths.insert(path);
+    // If spine is empty or incomplete, fall back to collecting all xhtml resources
+    if reading_order.is_empty() {
+        let mut xhtml_resources: Vec<(String, epub::doc::ResourceItem)> = doc
+            .resources
+            .clone()
+            .into_iter()
+            .filter(|(_, item)| item.mime == "application/xhtml+xml")
+            .collect();
+        
+        // Sort resources by their id as fallback
+        xhtml_resources.sort_by(|a, b| a.0.cmp(&b.0));
+        
+        for (_, resource_item) in xhtml_resources {
+            let path = resource_item.path.to_string_lossy().replace('\\', "/");
+            if !processed_paths.contains(&path) {
+                reading_order.push(path.clone());
+                processed_paths.insert(path);
+            }
         }
     }
     
