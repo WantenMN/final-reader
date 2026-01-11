@@ -471,7 +471,7 @@ export default function ReadPage() {
       let currentScrollPercentage = 0;
       if (scrollableHeight > 0) {
         currentScrollPercentage = (scrollTop / scrollableHeight) * 100;
-        // Update state and ref with current scroll percentage
+        // Update ref with current scroll percentage
         scrollRef.current = currentScrollPercentage;
       }
       
@@ -485,13 +485,30 @@ export default function ReadPage() {
         updateReadingState();
       }, 500);
     };
+    
+    // Handle window resize to maintain scroll percentage
+    const handleResize = () => {
+      // Only restore if we have a valid scroll percentage
+      if (scrollRef.current > 0) {
+        const scrollHeight = document.documentElement.scrollHeight;
+        const clientHeight = window.innerHeight;
+        const scrollableHeight = scrollHeight - clientHeight;
+        
+        if (scrollableHeight > 0) {
+          const targetScrollTop = (scrollableHeight * scrollRef.current) / 100;
+          window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
+        }
+      }
+    };
 
-    // Add scroll event listener to window
+    // Add event listeners
     window.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      // Clean up event listener and timeout
+      // Clean up event listeners and timeout
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
       if (scrollDebounceRef.current) {
         clearTimeout(scrollDebounceRef.current);
       }
