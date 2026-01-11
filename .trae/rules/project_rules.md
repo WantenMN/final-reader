@@ -1,0 +1,2 @@
+- After writing code, use the corresponding tools to check for errors, such as syntax errors, logical errors, etc., and fix them
+- Do not run code
