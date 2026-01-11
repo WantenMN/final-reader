@@ -21,8 +21,8 @@ export default function BookList({ books }: BookListProps) {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 sm:gap-5 md:grid-cols-3 md:gap-6 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+    <div className="px-4 sm:px-6 lg:px-8 py-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 md:gap-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
         {books.map((book) => (
           <BookItem key={book.id} book={book} />
         ))}
