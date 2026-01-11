@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/constants";
-import type { Chapter } from "@/app/types";
+import type { Book, Chapter } from "@/app/types";
 import ReadHeader from "@/components/ReadHeader"; // Added import
 import TableOfContents from "@/components/TableOfContents"; // Added import for new TOC component
 import { useReadStore } from "@/lib/store"; // Added import
@@ -11,9 +11,9 @@ import { useReadStore } from "@/lib/store"; // Added import
 export default function ReadPage() {
   const params = useParams();
   const bookId = params.bookId as string;
-  const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } =
-    useReadStore(); // Added useReadStore properties
+  const { isTocOpen, fontSize, lineHeight, paragraphSpacing, contentWidth } = useReadStore(); // Added useReadStore properties
 
+  const [book, setBook] = useState<Book | null>(null); // Book details
   const [chapters, setChapters] = useState<Chapter[]>([]); // Full reading order for navigation
   const [tocChapters, setTocChapters] = useState<Chapter[]>([]); // TOC from toc.ncx for display
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
@@ -44,7 +44,18 @@ export default function ReadPage() {
       setStateLoaded(false); // Reset stateLoaded when starting to fetch
 
       try {
-        // 1. Fetch full reading order chapters (for navigation)
+        // 1. Fetch book details
+        const bookResponse = await fetch(
+          `${API_URL}/api/books`
+        );
+        if (!bookResponse.ok) {
+          throw new Error("Failed to fetch books");
+        }
+        const books: Book[] = await bookResponse.json();
+        const fetchedBook = books.find(b => b.id === bookId);
+        setBook(fetchedBook || null);
+
+        // 2. Fetch full reading order chapters (for navigation)
         const chaptersResponse = await fetch(
           `${API_URL}/api/books/${bookId}/chapters`
         );
@@ -54,7 +65,7 @@ export default function ReadPage() {
         const fetchedChapters: Chapter[] = await chaptersResponse.json();
         setChapters(fetchedChapters);
 
-        // 2. Fetch TOC chapters (for display in sidebar)
+        // 3. Fetch TOC chapters (for display in sidebar)
         const tocResponse = await fetch(
           `${API_URL}/api/books/${bookId}/toc`
         );
@@ -66,7 +77,7 @@ export default function ReadPage() {
           setTocChapters(fetchedChapters); // Fallback to full chapters if TOC fails
         }
 
-        // 3. Load state and determine current chapter
+        // 4. Load state and determine current chapter
         let initialChapterIndex = 0;
         try {
           const stateResponse = await fetch(
@@ -76,7 +87,7 @@ export default function ReadPage() {
             const readingState = await stateResponse.json();
             const savedPosition = readingState.position;
             if (savedPosition) {
-              // 3.1 If state exists, find the corresponding chapter in full reading order
+              // 4.1 If state exists, find the corresponding chapter in full reading order
               const savedChapterIndex = fetchedChapters.findIndex(
                 (chap) => chap.path === savedPosition
               );
@@ -90,7 +101,7 @@ export default function ReadPage() {
             "No saved reading state found or failed to fetch state:",
             stateError
           );
-          // 3.2 If no state, continue with default (first chapter)
+          // 4.2 If no state, continue with default (first chapter)
         }
 
         // Set the current chapter index based on state or default to first
@@ -367,6 +378,13 @@ export default function ReadPage() {
       setCurrentChapterIndex(currentChapterIndex + 1);
     }
   };
+
+  // Set document title when book is loaded
+  useEffect(() => {
+    if (book) {
+      document.title = book.title;
+    }
+  }, [book]);
 
   const isAllDataLoaded = stateLoaded && chapters.length > 0 && chapterContent !== "";
   
