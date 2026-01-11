@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { API_URL } from "@/lib/constants";
 import type { Book, Chapter } from "@/app/types";
@@ -26,14 +26,21 @@ export default function ReadPage() {
   const [chapterContentError, setChapterContentError] = useState<string | null>(
     null
   );
+  const [scrollPercentage, setScrollPercentage] = useState<number>(0); // Added state for scroll percentage
+  const [savedScrollPercentage, setSavedScrollPercentage] = useState<number>(0); // Added state for saved scroll percentage
+  const scrollRef = useRef<number>(0); // Ref to track scroll percentage
   // Removed initialScrollDone state
 
   // Only keep currentChapterRef, tocRef is now managed inside TableOfContents component
   const currentChapterRef = useRef<HTMLLIElement>(null);
   // Add ref for chapter content container to handle link clicks
   const contentContainerRef = useRef<HTMLDivElement>(null);
+  // Add ref for main content scroll container
+  const mainContentRef = useRef<HTMLDivElement>(null);
   // State to track if navigation was initiated from TOC (for scrolling behavior)
   const [isManualNavigation, setIsManualNavigation] = useState<boolean>(false);
+  // Ref for scroll debounce timer
+  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -79,6 +86,7 @@ export default function ReadPage() {
 
         // 4. Load state and determine current chapter
         let initialChapterIndex = 0;
+        let savedScrollPercent = 0;
         try {
           const stateResponse = await fetch(
             `${API_URL}/api/book/${bookId}/state`
@@ -93,6 +101,12 @@ export default function ReadPage() {
               );
               if (savedChapterIndex !== -1) {
                 initialChapterIndex = savedChapterIndex;
+                // 4.2 If scroll percentage exists, save it
+                if (readingState.scroll_percentage !== undefined && readingState.scroll_percentage !== null) {
+                  savedScrollPercent = readingState.scroll_percentage;
+                  scrollRef.current = savedScrollPercent;
+                  setSavedScrollPercentage(savedScrollPercent);
+                }
               }
             }
           }
@@ -101,7 +115,7 @@ export default function ReadPage() {
             "No saved reading state found or failed to fetch state:",
             stateError
           );
-          // 4.2 If no state, continue with default (first chapter)
+          // 4.3 If no state, continue with default (first chapter)
         }
 
         // Set the current chapter index based on state or default to first
@@ -277,33 +291,72 @@ export default function ReadPage() {
     fetchChapterContent();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
-  useEffect(() => {
-    async function updateReadingState() {
-      if (chapters.length === 0 || currentChapterIndex === -1 || !stateLoaded) {
-        return;
-      }
+  // Extract updateReadingState as a standalone function using useCallback
+  const updateReadingState = useCallback(async () => {
+    if (chapters.length === 0 || currentChapterIndex === -1 || !stateLoaded) {
+      return;
+    }
 
-      const chapter = chapters[currentChapterIndex];
-      try {
-        await fetch(`${API_URL}/api/book/${bookId}/state`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ position: chapter.path }),
-        });
-      } catch (err) {
-        console.error("Failed to update reading state:", err);
+    const chapter = chapters[currentChapterIndex];
+    
+    // Calculate scroll percentage based on window scroll position
+    let currentScrollPercentage = 0;
+    if (typeof window !== "undefined") {
+      const scrollTop = window.scrollY;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      const scrollableHeight = scrollHeight - clientHeight;
+      
+      if (scrollableHeight > 0) {
+        currentScrollPercentage = (scrollTop / scrollableHeight) * 100;
+        // Update state and ref with current scroll percentage
+        setScrollPercentage(currentScrollPercentage);
+        scrollRef.current = currentScrollPercentage;
       }
     }
+    
+    try {
+      await fetch(`${API_URL}/api/book/${bookId}/state`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          position: chapter.path,
+          scroll_percentage: currentScrollPercentage
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to update reading state:", err);
+    }
+  }, [chapters, currentChapterIndex, stateLoaded, bookId]);
+
+  // Call updateReadingState when chapter changes
+  useEffect(() => {
     updateReadingState();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
   // Add useEffect to handle link clicks in chapter content
   useEffect(() => {
-    // Scroll to top when chapter content changes
+    // Scroll to saved position when chapter content changes
     if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0 });
+      // Get the saved scroll percentage for this chapter
+      const currentChapterPath = chapters[currentChapterIndex]?.path;
+      if (currentChapterPath) {
+        // If it's the initial load and we have a saved scroll percentage, use that
+        if (isFirstLoad && savedScrollPercentage > 0) {
+          setTimeout(() => {
+            const scrollHeight = document.documentElement.scrollHeight;
+            const clientHeight = window.innerHeight;
+            const scrollableHeight = scrollHeight - clientHeight;
+            const targetScrollTop = (scrollableHeight * savedScrollPercentage) / 100;
+            window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+          }, 100); // Small delay to ensure content is rendered
+        } else {
+          // Otherwise, scroll to top
+          window.scrollTo({ top: 0 });
+        }
+      }
     }
     
     // Get all links in the content container and add click event listeners
@@ -361,7 +414,49 @@ export default function ReadPage() {
         });
       };
     }
-  }, [chapterContent, chapters]);
+  }, [chapterContent, chapters, isFirstLoad, currentChapterIndex, savedScrollPercentage]);
+
+  // Add scroll event listener with 500ms debounce
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleScroll = () => {
+      // Calculate current scroll percentage
+      const scrollTop = window.scrollY;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      const scrollableHeight = scrollHeight - clientHeight;
+      
+      let currentScrollPercentage = 0;
+      if (scrollableHeight > 0) {
+        currentScrollPercentage = (scrollTop / scrollableHeight) * 100;
+        // Update state and ref with current scroll percentage
+        setScrollPercentage(currentScrollPercentage);
+        scrollRef.current = currentScrollPercentage;
+      }
+      
+      // Clear existing timeout if scroll continues
+      if (scrollDebounceRef.current) {
+        clearTimeout(scrollDebounceRef.current);
+      }
+
+      // Set new timeout to save state after 500ms of inactivity
+      scrollDebounceRef.current = setTimeout(() => {
+        updateReadingState();
+      }, 500);
+    };
+
+    // Add scroll event listener to window
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      // Clean up event listener and timeout
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollDebounceRef.current) {
+        clearTimeout(scrollDebounceRef.current);
+      }
+    };
+  }, [updateReadingState]);
 
   const goToPreviousChapter = () => {
     if (currentChapterIndex > 0) {
@@ -431,7 +526,7 @@ export default function ReadPage() {
           isManualNavigation={isManualNavigation}
         />
         {/* Main content area */}
-        <div className={`grow p-4 pt-20 transition-all duration-300 ${isTocOpen ? 'ml-76' : 'ml-0'}`}>
+        <div className={`grow p-4 pt-20 transition-all duration-300 ${isTocOpen ? 'ml-76' : 'ml-0'}`} ref={mainContentRef}>
           {chapterContentError ? (
             <div className="text-red-500 mb-4">
               Error loading chapter content: {chapterContentError}

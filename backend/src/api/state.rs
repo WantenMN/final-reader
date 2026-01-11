@@ -13,6 +13,7 @@ use crate::{db::models::ReadingState, AppState};
 #[derive(Deserialize)]
 pub struct UpdateStatePayload {
     position: String,
+    scroll_percentage: f64,
 }
 
 pub async fn get_state(
@@ -48,11 +49,12 @@ pub async fn update_state(
     println!("POST /api/book/{}/state", id);
 
     let query_result = sqlx::query(
-        "INSERT INTO reading_state (book_id, position, last_updated) VALUES (?, ?, ?)
-        ON CONFLICT(book_id) DO UPDATE SET position = excluded.position, last_updated = excluded.last_updated",
+        "INSERT INTO reading_state (book_id, position, scroll_percentage, last_updated) VALUES (?, ?, ?, ?)
+        ON CONFLICT(book_id) DO UPDATE SET position = excluded.position, scroll_percentage = excluded.scroll_percentage, last_updated = excluded.last_updated",
     )
     .bind(id)
     .bind(&payload.position)
+    .bind(&payload.scroll_percentage)
     .bind(Utc::now())
     .execute(&state.db_pool)
     .await;

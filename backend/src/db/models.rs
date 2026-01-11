@@ -17,5 +17,6 @@ pub struct Book {
 pub struct ReadingState {
     pub book_id: Uuid,
     pub position: Option<String>,
+    pub scroll_percentage: Option<f64>,
     pub last_updated: DateTime<Utc>,
 }

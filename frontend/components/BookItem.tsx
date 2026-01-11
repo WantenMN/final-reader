@@ -11,7 +11,7 @@ export default function BookItem({ book }: BookItemProps) {
   const coverUrl = hasCover ? `${API_URL}/api/books/${book.id}/cover` : null;
 
   return (
-    <Link href={`/read/${book.id}`} className="block group" target="_blank">
+    <Link href={`/read/${book.id}`} className="block group">
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-300 hover:border-gray-300 hover:shadow-lg">
         <div className="relative aspect-[2/3] bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
           {hasCover && coverUrl ? (
