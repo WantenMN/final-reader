@@ -558,7 +558,6 @@ export default function ReadPage() {
     );
   }
 
-  const currentChapter = chapters[currentChapterIndex];
   const isFirstChapter = currentChapterIndex === 0;
   const isLastChapter = currentChapterIndex === chapters.length - 1;
 

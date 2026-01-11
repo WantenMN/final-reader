@@ -200,7 +200,7 @@ export default function TableOfContents({
             {/* Move expansion icon to the left - Using lucide-react icons */}
             {hasKids && (
               <span 
-                className="mr-2 cursor-pointer flex-shrink-0"
+                className="mr-2 cursor-pointer shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleChapterExpansion(chapter.path, e);
@@ -214,7 +214,7 @@ export default function TableOfContents({
                 )}
               </span>
             )}
-            <span className="flex-grow">{chapter.title}</span>
+            <span className="grow">{chapter.title}</span>
           </button>
           
           {/* Render children if expanded */}
