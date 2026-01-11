@@ -26,9 +26,9 @@ export default function ReadPage() {
   const [chapterContentError, setChapterContentError] = useState<string | null>(
     null
   );
-  const [scrollPercentage, setScrollPercentage] = useState<number>(0); // Added state for scroll percentage
   const [savedScrollPercentage, setSavedScrollPercentage] = useState<number>(0); // Added state for saved scroll percentage
   const scrollRef = useRef<number>(0); // Ref to track scroll percentage
+  const [contentOpacity, setContentOpacity] = useState<number>(0); // Added state for content opacity to handle flicker
   // Removed initialScrollDone state
 
   // Only keep currentChapterRef, tocRef is now managed inside TableOfContents component
@@ -41,6 +41,8 @@ export default function ReadPage() {
   const [isManualNavigation, setIsManualNavigation] = useState<boolean>(false);
   // Ref for scroll debounce timer
   const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to track if it's the initial mount
+  const isInitialMountRef = useRef<boolean>(true);
 
   useEffect(() => {
     async function fetchBookData() {
@@ -310,7 +312,6 @@ export default function ReadPage() {
       if (scrollableHeight > 0) {
         currentScrollPercentage = (scrollTop / scrollableHeight) * 100;
         // Update state and ref with current scroll percentage
-        setScrollPercentage(currentScrollPercentage);
         scrollRef.current = currentScrollPercentage;
       }
     }
@@ -331,8 +332,15 @@ export default function ReadPage() {
     }
   }, [chapters, currentChapterIndex, stateLoaded, bookId]);
 
-  // Call updateReadingState when chapter changes
+  // Call updateReadingState when chapter changes, but not on initial mount
   useEffect(() => {
+    if (isInitialMountRef.current) {
+      setTimeout(() => {
+        isInitialMountRef.current = false;
+      }, 1000);
+      return;
+    }
+
     updateReadingState();
   }, [bookId, chapters, currentChapterIndex, stateLoaded]);
 
@@ -343,18 +351,51 @@ export default function ReadPage() {
       // Get the saved scroll percentage for this chapter
       const currentChapterPath = chapters[currentChapterIndex]?.path;
       if (currentChapterPath) {
+        // Reset opacity to 0 when content changes
+        setContentOpacity(0);
+        
         // If it's the initial load and we have a saved scroll percentage, use that
         if (isFirstLoad && savedScrollPercentage > 0) {
+          // Aggressive scroll recovery logic
+          const scrollToSavedPosition = () => {
+            const currentScrollTop = window.scrollY;
+            
+            // Only scroll if current position is 0
+            if (currentScrollTop === 0) {
+              const scrollHeight = document.documentElement.scrollHeight;
+              const clientHeight = window.innerHeight;
+              const scrollableHeight = scrollHeight - clientHeight;
+              const targetScrollTop = (scrollableHeight * savedScrollPercentage) / 100;
+              
+              // Use immediate scrolling instead of smooth for aggressive recovery
+              window.scrollTo({ top: targetScrollTop, behavior: 'instant' });
+              
+              // Check again after a short delay to ensure scroll worked
+              setTimeout(() => {
+                const newScrollTop = window.scrollY;
+                if (newScrollTop === 0) {
+                  // If still 0, try again
+                  scrollToSavedPosition();
+                } else {
+                  // Scroll successful, fade in content
+                  setContentOpacity(1);
+                }
+              }, 50); // Short delay for next check
+            } else {
+              // Already scrolled, fade in content
+              setContentOpacity(1);
+            }
+          };
+          
+          // Initial call
           setTimeout(() => {
-            const scrollHeight = document.documentElement.scrollHeight;
-            const clientHeight = window.innerHeight;
-            const scrollableHeight = scrollHeight - clientHeight;
-            const targetScrollTop = (scrollableHeight * savedScrollPercentage) / 100;
-            window.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+            scrollToSavedPosition();
           }, 100); // Small delay to ensure content is rendered
         } else {
-          // Otherwise, scroll to top
+          // Otherwise, scroll to top and fade in content
           window.scrollTo({ top: 0 });
+          // Fade in content
+          setContentOpacity(1);
         }
       }
     }
@@ -431,7 +472,6 @@ export default function ReadPage() {
       if (scrollableHeight > 0) {
         currentScrollPercentage = (scrollTop / scrollableHeight) * 100;
         // Update state and ref with current scroll percentage
-        setScrollPercentage(currentScrollPercentage);
         scrollRef.current = currentScrollPercentage;
       }
       
@@ -543,6 +583,8 @@ export default function ReadPage() {
                   {
                     fontSize: `${fontSize}px`,
                     lineHeight: `${lineHeight}`,
+                    opacity: contentOpacity,
+                    transition: 'opacity 0.3s ease-in-out',
                     // Use CSS variables for user settings that can be referenced by global styles
                     "--user-font-size": `${fontSize}px`,
                     "--user-line-height": lineHeight,
