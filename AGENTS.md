@@ -302,6 +302,7 @@ fun BookList(books: List<Book>, modifier: Modifier = Modifier) {
 - Use semantic commit messages following Conventional Commits format
 - Keep commits focused on single changes
 - Run lint and tests before committing
+- NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive.
 
 ### Semantic Commit Message Format
 
