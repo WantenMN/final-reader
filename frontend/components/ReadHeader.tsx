@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useReadStore } from "@/lib/store";
 import {
   MenuIcon,
-  XIcon,
-  SettingsIcon,
   PlusIcon,
   MinusIcon,
   HomeIcon,
