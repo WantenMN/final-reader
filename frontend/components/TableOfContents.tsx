@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
-import type { Chapter } from '@/app/types';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useRef, useState } from "react";
+import type { Chapter } from "@/app/types";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface TableOfContentsProps {
   tocChapters: Chapter[];
@@ -23,14 +23,16 @@ export default function TableOfContents({
 }: TableOfContentsProps) {
   const tocRef = useRef<HTMLDivElement>(null);
   // State to track expanded/collapsed chapters
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Toggle chapter expansion
   const toggleChapterExpansion = (chapterPath: string, e: React.MouseEvent) => {
     // Prevent triggering chapter navigation
     e.stopPropagation();
-    
-    setExpandedChapters(prev => {
+
+    setExpandedChapters((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(chapterPath)) {
         newSet.delete(chapterPath);
@@ -40,43 +42,48 @@ export default function TableOfContents({
       return newSet;
     });
   };
-  
+
   // Get all parent chapters of a given chapter
-  const getParentChapters = React.useCallback((targetChapter: Chapter | undefined) => {
-    if (!targetChapter) return [];
-    
-    const parents: Chapter[] = [];
-    
-    // Find the corresponding chapter in tocChapters using path
-    const currentTocChapter = tocChapters.find(chap => chap.path === targetChapter.path);
-    if (!currentTocChapter) return [];
-    
-    let currentLevel = currentTocChapter.level;
-    
-    // Find all parent chapters by checking chapters before current one
-    for (let i = tocChapters.indexOf(currentTocChapter) - 1; i >= 0; i--) {
-      const potentialParent = tocChapters[i];
-      if (potentialParent.level < currentLevel) {
-        parents.push(potentialParent);
-        // Update level to find grandparent
-        currentLevel = potentialParent.level;
+  const getParentChapters = React.useCallback(
+    (targetChapter: Chapter | undefined) => {
+      if (!targetChapter) return [];
+
+      const parents: Chapter[] = [];
+
+      // Find the corresponding chapter in tocChapters using path
+      const currentTocChapter = tocChapters.find(
+        (chap) => chap.path === targetChapter.path,
+      );
+      if (!currentTocChapter) return [];
+
+      let currentLevel = currentTocChapter.level;
+
+      // Find all parent chapters by checking chapters before current one
+      for (let i = tocChapters.indexOf(currentTocChapter) - 1; i >= 0; i--) {
+        const potentialParent = tocChapters[i];
+        if (potentialParent.level < currentLevel) {
+          parents.push(potentialParent);
+          // Update level to find grandparent
+          currentLevel = potentialParent.level;
+        }
       }
-    }
-    
-    return parents;
-  }, [tocChapters]);
-  
+
+      return parents;
+    },
+    [tocChapters],
+  );
+
   // Auto-expand parent chapters when current chapter changes
   React.useEffect(() => {
     const currentChapter = chapters[currentChapterIndex];
     if (currentChapter) {
       const parentChapters = getParentChapters(currentChapter);
-      
+
       if (parentChapters.length > 0) {
-        setExpandedChapters(prev => {
+        setExpandedChapters((prev) => {
           const newSet = new Set(prev);
           // Add all parent chapters to the expanded set
-          parentChapters.forEach(parent => {
+          parentChapters.forEach((parent) => {
             newSet.add(parent.path);
           });
           return newSet;
@@ -95,7 +102,7 @@ export default function TableOfContents({
     const nested: { [key: string]: Chapter[] } = {};
     const rootChapters: Chapter[] = [];
     const chapterStack: Chapter[] = [];
-    
+
     tocChapters.forEach((chapter) => {
       if (chapterStack.length === 0) {
         // This is a root chapter
@@ -104,13 +111,13 @@ export default function TableOfContents({
       } else {
         // Check the level against the top of the stack
         let parent = chapterStack[chapterStack.length - 1];
-        
+
         // Pop from stack until we find the parent with lower level
         while (chapterStack.length > 0 && parent.level >= chapter.level) {
           chapterStack.pop();
           parent = chapterStack[chapterStack.length - 1];
         }
-        
+
         if (chapterStack.length > 0) {
           // Add to parent's children
           if (!nested[parent.path]) {
@@ -121,33 +128,38 @@ export default function TableOfContents({
           // This is a root chapter
           rootChapters.push(chapter);
         }
-        
+
         chapterStack.push(chapter);
       }
     });
-    
+
     return { rootChapters, nested };
   };
-  
+
   // Check if a chapter has children
   const hasChildren = (chapter: Chapter) => {
     const { nested } = getNestedChapters();
     return nested[chapter.path] && nested[chapter.path].length > 0;
   };
-  
+
   // Get children of a chapter
   const getChildren = (chapter: Chapter) => {
     const { nested } = getNestedChapters();
     return nested[chapter.path] || [];
   };
-  
+
   // Auto-scroll to current chapter after it has been expanded
   React.useEffect(() => {
     // Only scroll if the navigation wasn't initiated from the TOC itself
-    if (isTocOpen && currentChapterRef && currentChapterRef.current && !isManualNavigation) {
+    if (
+      isTocOpen &&
+      currentChapterRef &&
+      currentChapterRef.current &&
+      !isManualNavigation
+    ) {
       const currentChapterElement = currentChapterRef.current;
       const sidebar = tocRef.current;
-      
+
       if (sidebar && currentChapterElement) {
         // Wait for the DOM to update with the expanded chapters
         setTimeout(() => {
@@ -155,30 +167,40 @@ export default function TableOfContents({
           const offset = 60;
           const elementTop = currentChapterElement.offsetTop;
           const scrollPosition = elementTop - offset;
-          
+
           // Use smooth scroll behavior
-          sidebar.style.scrollBehavior = 'smooth';
+          sidebar.style.scrollBehavior = "smooth";
           // Ensure the scroll position doesn't go negative
           sidebar.scrollTop = Math.max(0, scrollPosition);
           // Reset to auto behavior after scrolling to prevent interference with manual scrolling
           setTimeout(() => {
-            sidebar.style.scrollBehavior = 'auto';
+            sidebar.style.scrollBehavior = "auto";
           }, 1000);
         }, 0); // Use setTimeout to ensure DOM has updated
       }
     }
-  }, [isTocOpen, currentChapterIndex, expandedChapters, currentChapterRef, isManualNavigation]); // Add isManualNavigation to dependencies
-  
+  }, [
+    isTocOpen,
+    currentChapterIndex,
+    expandedChapters,
+    currentChapterRef,
+    isManualNavigation,
+  ]); // Add isManualNavigation to dependencies
+
   // Render TOC chapters recursively with nested structure
   const renderTocChapters = () => {
     const { rootChapters } = getNestedChapters();
-    
-    const renderChapter = (chapter: Chapter, depth: number): React.ReactNode => {
-      const isCurrentChapter = chapters[currentChapterIndex]?.path === chapter.path;
+
+    const renderChapter = (
+      chapter: Chapter,
+      depth: number,
+    ): React.ReactNode => {
+      const isCurrentChapter =
+        chapters[currentChapterIndex]?.path === chapter.path;
       const hasKids = hasChildren(chapter);
       const isExpanded = isChapterExpanded(chapter.path);
       const children = getChildren(chapter);
-      
+
       return (
         <li
           key={chapter.path} // Use unique path as key instead of index
@@ -188,7 +210,7 @@ export default function TableOfContents({
             onClick={() => {
               // Find the index of this TOC chapter in the full reading order
               const targetIndex = chapters.findIndex(
-                (chap) => chap.path === chapter.path
+                (chap) => chap.path === chapter.path,
               );
               if (targetIndex !== -1) {
                 onChapterClick(targetIndex);
@@ -199,7 +221,7 @@ export default function TableOfContents({
           >
             {/* Move expansion icon to the left - Using lucide-react icons */}
             {hasKids && (
-              <span 
+              <span
                 className="mr-2 cursor-pointer shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -216,7 +238,7 @@ export default function TableOfContents({
             )}
             <span className="grow">{chapter.title}</span>
           </button>
-          
+
           {/* Render children if expanded */}
           {hasKids && isExpanded && (
             <ul className="ml-4 mt-0">
@@ -226,25 +248,19 @@ export default function TableOfContents({
         </li>
       );
     };
-    
-    return (
-      <ul>
-        {rootChapters.map((chapter) => renderChapter(chapter, 0))}
-      </ul>
-    );
+
+    return <ul>{rootChapters.map((chapter) => renderChapter(chapter, 0))}</ul>;
   };
 
   return (
     <div
       ref={tocRef}
       className={`fixed top-0 left-0 w-76 p-4 shadow-2xl h-screen overflow-y-auto pt-20 transform transition-all duration-300 ease-in-out z-20 bg-white ${
-        isTocOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+        isTocOpen ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"
       }`}
     >
       <h2 className="text-xl font-bold mb-4">Chapters</h2>
-      <nav>
-            {renderTocChapters()}
-          </nav>
+      <nav>{renderTocChapters()}</nav>
     </div>
   );
 }

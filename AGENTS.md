@@ -27,6 +27,9 @@ pnpm start
 # Lint code
 pnpm lint
 
+# Format code
+pnpm format
+
 # Run single test file (when tests are added)
 pnpm jest path/to/test/file.test.ts
 ```

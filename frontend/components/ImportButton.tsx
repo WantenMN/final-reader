@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useRef, useState } from 'react';
+import { useRef, useState } from "react";
 import { API_URL } from "@/lib/constants";
 
 interface ImportButtonProps {
@@ -11,7 +11,9 @@ export default function ImportButton({ onBookImported }: ImportButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const files = event.target.files;
     if (!files || files.length === 0) {
       return;
@@ -20,30 +22,30 @@ export default function ImportButton({ onBookImported }: ImportButtonProps) {
     setIsUploading(true);
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-      formData.append('file', files[i]);
+      formData.append("file", files[i]);
     }
 
     try {
       const response = await fetch(`${API_URL}/api/import`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        throw new Error("Upload failed");
       }
 
       // Assuming the backend responds with success
-      console.log('Upload successful');
+      console.log("Upload successful");
       onBookImported(); // Refresh the book list
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error("Error uploading file:", error);
       // Handle upload error (e.g., show a notification)
     } finally {
       setIsUploading(false);
       // Reset file input
-      if(fileInputRef.current) {
-        fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -68,7 +70,7 @@ export default function ImportButton({ onBookImported }: ImportButtonProps) {
         disabled={isUploading}
         className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:bg-gray-400"
       >
-        {isUploading ? 'Uploading...' : 'Import Books'}
+        {isUploading ? "Uploading..." : "Import Books"}
       </button>
     </>
   );

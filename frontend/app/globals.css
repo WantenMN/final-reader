@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 .prose p {
-  margin-bottom: calc(var(--paragraph-spacing-multiplier, 1) * 1em); /* Default to 1em if variable not set */
+  margin-bottom: calc(
+    var(--paragraph-spacing-multiplier, 1) * 1em
+  ); /* Default to 1em if variable not set */
 }
 
 /* Ensure user font settings take precedence by using specific selector */

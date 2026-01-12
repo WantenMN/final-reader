@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from "react";
 import type { Book } from "./types";
@@ -13,7 +13,7 @@ export default function Home() {
     try {
       const response = await fetch(`${API_URL}/api/books`);
       if (!response.ok) {
-        throw new Error('Failed to fetch books');
+        throw new Error("Failed to fetch books");
       }
       const data: Book[] = await response.json();
       setBooks(data);

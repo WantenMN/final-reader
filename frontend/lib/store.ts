@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface ReadState {
   isTocOpen: boolean;
@@ -26,15 +26,17 @@ export const useReadStore = create<ReadState>()(
       paragraphSpacing: 1,
       contentWidth: 700,
       toggleToc: () => set((state) => ({ isTocOpen: !state.isTocOpen })),
-      toggleHeader: () => set((state) => ({ isHeaderVisible: !state.isHeaderVisible })),
+      toggleHeader: () =>
+        set((state) => ({ isHeaderVisible: !state.isHeaderVisible })),
       setFontSize: (size: number) => set({ fontSize: size }),
       setLineHeight: (height: number) => set({ lineHeight: height }),
-      setParagraphSpacing: (spacing: number) => set({ paragraphSpacing: spacing }),
+      setParagraphSpacing: (spacing: number) =>
+        set({ paragraphSpacing: spacing }),
       setContentWidth: (width: number) => set({ contentWidth: width }),
     }),
     {
-      name: 'read-storage', // unique name
+      name: "read-storage", // unique name
       storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
-    }
-  )
+    },
+  ),
 );
