@@ -297,6 +297,14 @@ fun BookList(books: List<Book>, modifier: Modifier = Modifier) {
 - After writing code, use the corresponding tools to check for errors, such as syntax errors, logical errors, etc.
 - Do not run code
 
+### Lint Rules
+- After writing code, run lint commands (e.g., `pnpm lint`, `cargo clippy`, `./gradlew lint`)
+- Fix both errors AND warnings from linting
+- Do not leave any lint warnings unresolved
+- For frontend: fix all ESLint warnings
+- For backend: fix all Clippy warnings
+- For Android: fix all lint warnings when Java environment is available
+
 ## Commit Guidelines
 
 - Use semantic commit messages following Conventional Commits format
